@@ -58,6 +58,7 @@ export interface Activity {
   participants: { uid: string; role: string; notes?: string; displayName?: string; photoURL?: string }[];
   createdAt: any;
   country?: string;
+  isPinned?: boolean;
 }
 
 export interface Post {
@@ -73,6 +74,7 @@ export interface Post {
   coverImage?: string;
   videoLink?: string;
   likes?: string[];
+  isPinned?: boolean;
 }
 
 export interface ServiceAd {
@@ -87,4 +89,5 @@ export interface ServiceAd {
   coverImage?: string;
   videoLink?: string;
   supports?: string[];
+  isPinned?: boolean;
 }

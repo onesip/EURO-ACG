@@ -9,7 +9,7 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { Post, PostType } from '../types';
-import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles, Edit, Trash2 } from 'lucide-react';
+import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const EUROPEAN_COUNTRIES = [
@@ -44,6 +44,8 @@ export default function CommunityPage() {
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
+  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
+
   const handleLike = async (postId: string, currentLikes: string[] = []) => {
     if (!user) {
       alert(lang === 'zh' ? '请先登录以进行贴贴！' : 'Please login to like posts!');
@@ -61,6 +63,17 @@ export default function CommunityPage() {
     }
   };
 
+  const handlePin = async (postId: string, currentlyPinned: boolean = false) => {
+    if (!isAdmin) return;
+    try {
+      await updateDoc(doc(db, 'posts', postId), {
+        isPinned: !currentlyPinned
+      });
+    } catch (err) {
+      console.error("Failed to pin post", err);
+    }
+  };
+
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -68,10 +81,18 @@ export default function CommunityPage() {
         id: doc.id,
         ...doc.data()
       })) as Post[];
-      setPosts(postsData);
+      
+      // Sort: Pinned posts first, then by createdAt
+      const sortedPosts = [...postsData].sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return 0; // maintain relative order from query
+      });
+
+      setPosts(sortedPosts);
     });
     return unsubscribe;
-  }, []);
+  }, [user]);
 
   const filteredPosts = posts.filter(p => {
     if (p.type !== activeTab) return false;
@@ -185,7 +206,16 @@ export default function CommunityPage() {
         {filteredPosts.map((post) => {
           const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === post.country);
           return (
-            <div key={post.id} className="bg-[#141416] p-6 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all group">
+            <div key={post.id} className={cn(
+              "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
+              post.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
+            )}>
+              {post.isPinned && (
+                <div className="absolute -top-2.5 -left-2.5 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg z-10 flex items-center gap-1">
+                  <Pin className="w-3.5 h-3.5 fill-white" />
+                  <span className="text-[10px] font-bold pr-1">{lang === 'zh' ? '置顶' : 'Pinned'}</span>
+                </div>
+              )}
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-start gap-3">
                   <div 
@@ -292,6 +322,51 @@ export default function CommunityPage() {
                         </button>
                       </div>
                     )}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handlePin(post.id, post.isPinned)}
+                        className={cn(
+                          "flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition-all shadow-sm",
+                          post.isPinned 
+                            ? "bg-indigo-600 text-white hover:bg-indigo-700" 
+                            : "bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
+                        )}
+                      >
+                        <Pin className={cn("w-3.5 h-3.5", post.isPinned ? "fill-white" : "")} />
+                        {post.isPinned 
+                          ? (lang === 'zh' ? '取消置顶' : 'Unpin') 
+                          : (lang === 'zh' ? '置顶' : 'Pin')}
+                      </button>
+                    )}
+                  </div>
+                )}
+                
+                {/* Admin moderation controls for non-author posts */}
+                {isAdmin && user?.uid !== post.authorId && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePin(post.id, post.isPinned)}
+                      className={cn(
+                        "flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition-all shadow-sm",
+                        post.isPinned 
+                          ? "bg-indigo-600 text-white hover:bg-indigo-700" 
+                          : "bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
+                      )}
+                    >
+                      <Pin className={cn("w-3.5 h-3.5", post.isPinned ? "fill-white" : "")} />
+                      {post.isPinned 
+                        ? (lang === 'zh' ? '取消置顶' : 'Unpin') 
+                        : (lang === 'zh' ? '置顶' : 'Pin')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(post.id)}
+                      className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/10 hover:bg-rose-500/20 px-2.5 py-1.5 rounded-xl transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> {lang === 'zh' ? '管理删除' : 'Admin Delete'}
+                    </button>
                   </div>
                 )}
               </div>

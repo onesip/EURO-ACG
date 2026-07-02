@@ -8,7 +8,7 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { Activity } from '../types';
-import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2 } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
 import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { cn } from '../lib/utils';
 
@@ -35,6 +35,8 @@ export default function ActivitiesPage() {
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
+  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
+
   useEffect(() => {
     const q = query(collection(db, 'activities'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -42,10 +44,28 @@ export default function ActivitiesPage() {
         id: doc.id,
         ...doc.data()
       })) as Activity[];
+      
+      // Sort: Pinned first, then by createdAt desc
+      activitiesData.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return 0; // maintain relative order from query
+      });
       setActivities(activitiesData);
     });
     return unsubscribe;
-  }, []);
+  }, [user]);
+
+  const handlePin = async (activityId: string, currentlyPinned: boolean = false) => {
+    if (!isAdmin) return;
+    try {
+      await updateDoc(doc(db, 'activities', activityId), {
+        isPinned: !currentlyPinned
+      });
+    } catch (err) {
+      console.error("Failed to pin activity", err);
+    }
+  };
 
   const handleJoin = async (activityId: string, isJoining: boolean) => {
     if (!user || !profile) return alert('Please login to join activities');
@@ -141,7 +161,16 @@ export default function ActivitiesPage() {
           const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === activity.country);
           
           return (
-            <div key={activity.id} className="bg-[#141416] p-6 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all group">
+            <div key={activity.id} className={cn(
+              "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
+              activity.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
+            )}>
+              {activity.isPinned && (
+                <div className="absolute -top-2.5 -left-2.5 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg z-10 flex items-center gap-1">
+                  <Pin className="w-3.5 h-3.5 fill-white" />
+                  <span className="text-[10px] font-bold pr-1">{lang === 'zh' ? '置顶' : 'Pinned'}</span>
+                </div>
+              )}
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">
                   <div className="px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full text-xs font-semibold uppercase tracking-wider">
@@ -201,56 +230,76 @@ export default function ActivitiesPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  {user && activity.creatorId === user.uid && (
-                    <div className="flex items-center gap-1.5">
-                      {confirmDeleteId === activity.id ? (
-                        <div className="flex items-center gap-1 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-lg">
-                          <span className="text-[10px] text-rose-400 font-bold">{lang === 'zh' ? '确定删除？' : 'Delete?'}</span>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                await deleteDoc(doc(db, 'activities', activity.id));
-                                setConfirmDeleteId(null);
-                              } catch (err) {
-                                console.error(err);
-                                alert('Delete failed');
-                              }
-                            }}
-                            className="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-1.5 py-0.5 rounded transition-colors"
-                          >
-                            {lang === 'zh' ? '是' : 'Yes'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirmDeleteId(null)}
-                            className="text-[9px] text-slate-400 hover:text-slate-200 px-1"
-                          >
-                            {lang === 'zh' ? '否' : 'No'}
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingActivity(activity);
-                            }}
-                            className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-lg transition-colors"
-                          >
-                            <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirmDeleteId(activity.id)}
-                            className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" /> {lang === 'zh' ? '删除' : 'Delete'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {(user && activity.creatorId === user.uid || isAdmin) && (
+                      <div className="flex items-center gap-1.5">
+                        {confirmDeleteId === activity.id ? (
+                          <div className="flex items-center gap-1 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-lg">
+                            <span className="text-[10px] text-rose-400 font-bold">{lang === 'zh' ? '确定删除？' : 'Delete?'}</span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await deleteDoc(doc(db, 'activities', activity.id));
+                                  setConfirmDeleteId(null);
+                                } catch (err) {
+                                  console.error(err);
+                                  alert('Delete failed');
+                                }
+                              }}
+                              className="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-1.5 py-0.5 rounded transition-colors"
+                            >
+                              {lang === 'zh' ? '是' : 'Yes'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-[9px] text-slate-400 hover:text-slate-200 px-1"
+                            >
+                              {lang === 'zh' ? '否' : 'No'}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => handlePin(activity.id, activity.isPinned)}
+                                className={cn(
+                                  "flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg transition-all shadow-sm",
+                                  activity.isPinned 
+                                    ? "bg-indigo-600 text-white hover:bg-indigo-700" 
+                                    : "bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
+                                )}
+                              >
+                                <Pin className={cn("w-3.5 h-3.5", activity.isPinned ? "fill-white" : "")} />
+                                {activity.isPinned ? (lang === 'zh' ? '取消置顶' : 'Unpin') : (lang === 'zh' ? '置顶' : 'Pin')}
+                              </button>
+                            )}
+                            {activity.creatorId === user?.uid && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingActivity(activity);
+                                }}
+                                className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-lg transition-colors"
+                              >
+                                <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
+                              </button>
+                            )}
+                            {(activity.creatorId === user?.uid || isAdmin) && (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteId(activity.id)}
+                                className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-lg transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> {isAdmin && user?.uid !== activity.creatorId ? (lang === 'zh' ? '管理删除' : 'Admin Del') : (lang === 'zh' ? '删除' : 'Delete')}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     onClick={() => handleJoin(activity.id, !isParticipant)}
@@ -263,7 +312,6 @@ export default function ActivitiesPage() {
                     {isParticipant ? t('act.cancelJoin') : t('act.join')}
                   </button>
                 </div>
-              </div>
               
               <CommentSection parentCollection="activities" parentId={activity.id} />
             </div>

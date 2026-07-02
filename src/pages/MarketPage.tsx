@@ -9,7 +9,7 @@ import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { Post } from '../types';
-import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart } from 'lucide-react';
+import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function MarketPage() {
@@ -20,6 +20,8 @@ export default function MarketPage() {
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
+
+  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
   const handleLike = async (postId: string, currentLikes: string[] = []) => {
     if (!user) {
@@ -38,6 +40,17 @@ export default function MarketPage() {
     }
   };
 
+  const handlePin = async (postId: string, currentlyPinned: boolean = false) => {
+    if (!isAdmin) return;
+    try {
+      await updateDoc(doc(db, 'posts', postId), {
+        isPinned: !currentlyPinned
+      });
+    } catch (err) {
+      console.error("Failed to pin market post", err);
+    }
+  };
+
   useEffect(() => {
     const q = query(
       collection(db, 'posts'), 
@@ -49,8 +62,10 @@ export default function MarketPage() {
         ...doc.data()
       })) as Post[];
       
-      // Sort locally descending
+      // Sort: Pinned first, then by createdAt desc
       postsData.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
         const aTime = a.createdAt?.toMillis() || 0;
         const bTime = b.createdAt?.toMillis() || 0;
         return bTime - aTime;
@@ -58,7 +73,7 @@ export default function MarketPage() {
       setPosts(postsData);
     });
     return unsubscribe;
-  }, []);
+  }, [user]);
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -78,7 +93,16 @@ export default function MarketPage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {posts.map((post) => (
-          <div key={post.id} className="bg-[#141416] p-6 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all flex flex-col h-full group">
+          <div key={post.id} className={cn(
+            "bg-[#141416] p-6 rounded-2xl border transition-all flex flex-col h-full group relative",
+            post.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
+          )}>
+            {post.isPinned && (
+              <div className="absolute -top-2.5 -left-2.5 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg z-10 flex items-center gap-1">
+                <Pin className="w-3.5 h-3.5 fill-white" />
+                <span className="text-[10px] font-bold pr-1">{lang === 'zh' ? '置顶' : 'Pinned'}</span>
+              </div>
+            )}
             <div className="flex items-start justify-between mb-3">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/10 text-amber-400 rounded-md text-xs font-semibold">
                 <Tag className="w-3 h-3" />
@@ -121,7 +145,7 @@ export default function MarketPage() {
               </div>
             </div>
 
-            {user && post.authorId === user.uid && (
+            {(user && post.authorId === user.uid || isAdmin) && (
               <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-white/5 border-dashed">
                 {confirmDeleteId === post.id ? (
                   <div className="flex items-center gap-1.5 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-xl">
@@ -151,22 +175,41 @@ export default function MarketPage() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingItem(post);
-                      }}
-                      className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
-                    >
-                      <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmDeleteId(post.id)}
-                      className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> {lang === 'zh' ? '下架' : 'Remove'}
-                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handlePin(post.id, post.isPinned)}
+                        className={cn(
+                          "flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition-all shadow-sm",
+                          post.isPinned 
+                            ? "bg-indigo-600 text-white hover:bg-indigo-700" 
+                            : "bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
+                        )}
+                      >
+                        <Pin className={cn("w-3.5 h-3.5", post.isPinned ? "fill-white" : "")} />
+                        {post.isPinned ? (lang === 'zh' ? '取消置顶' : 'Unpin') : (lang === 'zh' ? '置顶' : 'Pin')}
+                      </button>
+                    )}
+                    {post.authorId === user?.uid && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingItem(post);
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
+                      >
+                        <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
+                      </button>
+                    )}
+                    {(post.authorId === user?.uid || isAdmin) && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(post.id)}
+                        className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> {isAdmin && user?.uid !== post.authorId ? (lang === 'zh' ? '管理下架' : 'Admin Del') : (lang === 'zh' ? '下架' : 'Remove')}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

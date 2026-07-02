@@ -9,7 +9,7 @@ import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { ServiceAd, ServiceType } from '../types';
-import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame } from 'lucide-react';
+import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const EUROPEAN_COUNTRIES = [
@@ -43,6 +43,8 @@ export default function ServicesPage() {
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
+  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
+
   const handleSupport = async (adId: string, currentSupports: string[] = []) => {
     if (!user) {
       alert(lang === 'zh' ? '请先登录以支持该服务！' : 'Please login to support this service!');
@@ -60,6 +62,17 @@ export default function ServicesPage() {
     }
   };
 
+  const handlePin = async (adId: string, currentlyPinned: boolean = false) => {
+    if (!isAdmin) return;
+    try {
+      await updateDoc(doc(db, 'services', adId), {
+        isPinned: !currentlyPinned
+      });
+    } catch (err) {
+      console.error("Failed to pin service", err);
+    }
+  };
+
   useEffect(() => {
     const q = query(collection(db, 'services'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -67,10 +80,17 @@ export default function ServicesPage() {
         id: doc.id,
         ...doc.data()
       })) as ServiceAd[];
+      
+      // Sort: Pinned first, then by createdAt desc
+      adsData.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return 0; // maintain relative order from query
+      });
       setAds(adsData);
     });
     return unsubscribe;
-  }, []);
+  }, [user]);
 
   const filteredAds = ads.filter(ad => {
     if (ad.type !== activeTab) return false;
@@ -150,7 +170,16 @@ export default function ServicesPage() {
         {filteredAds.map((ad) => {
           const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === ad.country);
           return (
-            <div key={ad.id} className="bg-[#141416] p-6 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all group">
+            <div key={ad.id} className={cn(
+              "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
+              ad.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
+            )}>
+              {ad.isPinned && (
+                <div className="absolute -top-2.5 -left-2.5 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg z-10 flex items-center gap-1">
+                  <Pin className="w-3.5 h-3.5 fill-white" />
+                  <span className="text-[10px] font-bold pr-1">{lang === 'zh' ? '置顶' : 'Pinned'}</span>
+                </div>
+              )}
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-start gap-3">
                   <div 
@@ -231,7 +260,7 @@ export default function ServicesPage() {
               </div>
               
               {/* Edit/Delete Actions */}
-              {user && ad.authorId === user.uid && (
+              {(user && ad.authorId === user.uid || isAdmin) && (
                 <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-white/5 border-dashed">
                   {confirmDeleteId === ad.id ? (
                     <div className="flex items-center gap-1.5 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-xl">
@@ -261,22 +290,41 @@ export default function ServicesPage() {
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingAd(ad);
-                        }}
-                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
-                      >
-                        <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDeleteId(ad.id)}
-                        className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" /> {lang === 'zh' ? '下架' : 'Remove'}
-                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => handlePin(ad.id, ad.isPinned)}
+                          className={cn(
+                            "flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition-all shadow-sm",
+                            ad.isPinned 
+                              ? "bg-indigo-600 text-white hover:bg-indigo-700" 
+                              : "bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20"
+                          )}
+                        >
+                          <Pin className={cn("w-3.5 h-3.5", ad.isPinned ? "fill-white" : "")} />
+                          {ad.isPinned ? (lang === 'zh' ? '取消置顶' : 'Unpin') : (lang === 'zh' ? '置顶' : 'Pin')}
+                        </button>
+                      )}
+                      {ad.authorId === user?.uid && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingAd(ad);
+                          }}
+                          className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
+                        >
+                          <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
+                        </button>
+                      )}
+                      {(ad.authorId === user?.uid || isAdmin) && (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(ad.id)}
+                          className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> {isAdmin && user?.uid !== ad.authorId ? (lang === 'zh' ? '管理下架' : 'Admin Del') : (lang === 'zh' ? '下架' : 'Remove')}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
