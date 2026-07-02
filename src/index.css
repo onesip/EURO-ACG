@@ -14,3 +14,16 @@
   --color-indigo-600: rgb(var(--theme-600));
   --color-indigo-700: rgb(var(--theme-700));
 }
+
+@utility scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+}

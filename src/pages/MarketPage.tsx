@@ -108,6 +108,15 @@ export default function MarketPage() {
       {isComposeOpen && (
         <ComposeMarketModal onClose={() => setIsComposeOpen(false)} />
       )}
+
+      {/* Mobile Floating Action Button */}
+      <button
+        onClick={() => setIsComposeOpen(true)}
+        className="md:hidden fixed bottom-24 right-5 z-40 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white p-4 rounded-full shadow-[0_8px_24px_rgba(99,102,241,0.5)] transition-all flex items-center justify-center border border-white/10"
+        title={t('mkt.new')}
+      >
+        <Plus className="w-6 h-6" />
+      </button>
     </div>
   );
 }
@@ -147,7 +156,7 @@ function ComposeMarketModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-[#0A0A0B]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141416] rounded-3xl shadow-2xl border border-white/10 w-full max-w-md overflow-hidden animate-fadeIn">
+      <div className="bg-[#141416] rounded-3xl shadow-2xl border border-white/10 w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-none animate-fadeIn">
         <div className="flex justify-between items-center p-5 border-b border-white/5">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-indigo-400" />

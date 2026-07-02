@@ -140,7 +140,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content */}
-      <main className="max-w-3xl mx-auto p-4 md:p-8 pt-16 md:pt-8">
+      <main className="max-w-3xl mx-auto px-4 py-6 pt-20 pb-28 md:px-8 md:py-8 md:pt-8 md:pb-8">
         {/* Mobile Header with Language Toggle */}
         <div className="md:hidden fixed top-0 inset-x-0 h-14 bg-[#141416]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 z-50">
            <h1 className="text-lg font-bold tracking-tight text-white">EUROACG</h1>
@@ -154,42 +154,56 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Bottom Nav for Mobile */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-[#141416] border-t border-white/5 flex items-center justify-around p-3 pb-safe z-50">
-        {navItems.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors",
-              location.pathname === item.path 
-                ? "text-indigo-400" 
-                : "text-slate-500 hover:text-slate-300"
-            )}
-          >
-            <item.icon className="w-6 h-6" />
-            <span className="text-[10px] font-medium">{item.name}</span>
-          </Link>
-        ))}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-[#141416]/95 backdrop-blur-md border-t border-white/5 flex items-center justify-around px-2 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2.5 z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={cn(
+                "flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all duration-300 transform active:scale-95 relative",
+                isActive 
+                  ? "text-indigo-400 font-semibold" 
+                  : "text-slate-400 hover:text-slate-200"
+              )}
+            >
+              {isActive && (
+                <div className="absolute -top-1 w-8 h-1 rounded-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.8)] animate-pulse" />
+              )}
+              <item.icon className={cn("w-5.5 h-5.5 transition-transform", isActive ? "scale-110" : "")} />
+              <span className="text-[10px] tracking-wide mt-0.5">{item.name}</span>
+            </Link>
+          );
+        })}
         {user ? (
-          <Link
-            to="/profile"
-            className={cn(
-              "flex flex-col items-center gap-1 p-2 rounded-lg transition-colors",
-              location.pathname === '/profile' 
-                ? "text-indigo-400" 
-                : "text-slate-500 hover:text-slate-300"
-            )}
-          >
-            <UserIcon className="w-6 h-6" />
-            <span className="text-[10px] font-medium">{t('nav.profile')}</span>
-          </Link>
+          (() => {
+            const isActive = location.pathname === '/profile';
+            return (
+              <Link
+                to="/profile"
+                className={cn(
+                  "flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all duration-300 transform active:scale-95 relative",
+                  isActive 
+                    ? "text-indigo-400 font-semibold" 
+                    : "text-slate-400 hover:text-slate-200"
+                )}
+              >
+                {isActive && (
+                  <div className="absolute -top-1 w-8 h-1 rounded-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.8)] animate-pulse" />
+                )}
+                <UserIcon className={cn("w-5.5 h-5.5 transition-transform", isActive ? "scale-110" : "")} />
+                <span className="text-[10px] tracking-wide mt-0.5">{t('nav.profile')}</span>
+              </Link>
+            );
+          })()
         ) : (
           <button
             onClick={() => setIsLoginModalOpen(true)}
-            className="flex flex-col items-center gap-1 p-2 rounded-lg text-slate-500"
+            className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 active:scale-95 transition-all"
           >
-            <LogIn className="w-6 h-6" />
-            <span className="text-[10px] font-medium">{t('nav.login')}</span>
+            <LogIn className="w-5.5 h-5.5" />
+            <span className="text-[10px] tracking-wide mt-0.5">{t('nav.login')}</span>
           </button>
         )}
       </nav>
