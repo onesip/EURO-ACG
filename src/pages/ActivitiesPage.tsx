@@ -6,6 +6,7 @@ import CommentSection from '../components/CommentSection';
 import LocationInput from '../components/LocationInput';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
+import { useUserProfileModal } from '../components/UserProfileModal';
 import { Activity } from '../types';
 import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2 } from 'lucide-react';
 import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc } from 'firebase/firestore';
@@ -32,6 +33,7 @@ export default function ActivitiesPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
+  const { showProfile } = useUserProfileModal();
 
   useEffect(() => {
     const q = query(collection(db, 'activities'), orderBy('createdAt', 'desc'));
@@ -171,7 +173,12 @@ export default function ActivitiesPage() {
               <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-4">
                 <div className="flex -space-x-2 overflow-hidden">
                   {activity.participants?.slice(0, 5).map((p, i) => (
-                    <div key={i} className="inline-block w-8 h-8 rounded-full border-2 border-[#141416] bg-indigo-900 flex items-center justify-center text-xs font-medium text-indigo-200 overflow-hidden" title={p.displayName || 'User'}>
+                    <div 
+                      key={i} 
+                      onClick={() => showProfile(p.uid, { displayName: p.displayName, photoURL: p.photoURL })}
+                      className="inline-block w-8 h-8 rounded-full border-2 border-[#141416] hover:border-indigo-500 bg-indigo-900 flex items-center justify-center text-xs font-medium text-indigo-200 overflow-hidden cursor-pointer hover:scale-110 active:scale-95 transition-all duration-200 hover:z-25 relative" 
+                      title={p.displayName || 'User'}
+                    >
                       {p.photoURL ? (
                         <img src={p.photoURL} alt={p.displayName} className="w-full h-full object-cover" />
                       ) : (

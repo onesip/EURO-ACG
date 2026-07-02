@@ -7,6 +7,7 @@ import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
+import { useUserProfileModal } from '../components/UserProfileModal';
 import { Post } from '../types';
 import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -18,6 +19,7 @@ export default function MarketPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
+  const { showProfile } = useUserProfileModal();
 
   useEffect(() => {
     const q = query(
@@ -81,16 +83,27 @@ export default function MarketPage() {
 
             <div className="flex items-center justify-between pt-4 border-t border-white/5">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-[10px] font-bold overflow-hidden shrink-0">
+                <div 
+                  onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
+                  className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-[10px] font-bold overflow-hidden shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform border border-transparent hover:border-indigo-500/50"
+                >
                   {post.authorPhoto ? (
                     <img src={post.authorPhoto} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
                     post.authorName ? post.authorName.charAt(0) : post.authorId.substring(0, 2).toUpperCase()
                   )}
                 </div>
-                <span className="text-xs font-medium text-slate-400 truncate max-w-[120px]">{post.authorName || t('mkt.seller')}</span>
+                <span 
+                  onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
+                  className="text-xs font-medium text-slate-400 hover:text-indigo-400 cursor-pointer transition-colors truncate max-w-[120px]"
+                >
+                  {post.authorName || t('mkt.seller')}
+                </span>
               </div>
-              <button className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors">
+              <button 
+                onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
+                className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
                 {t('mkt.contact')}
               </button>
             </div>

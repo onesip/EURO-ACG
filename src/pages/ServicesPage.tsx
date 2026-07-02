@@ -7,6 +7,7 @@ import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
+import { useUserProfileModal } from '../components/UserProfileModal';
 import { ServiceAd, ServiceType } from '../types';
 import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -40,6 +41,7 @@ export default function ServicesPage() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
+  const { showProfile } = useUserProfileModal();
 
   useEffect(() => {
     const q = query(collection(db, 'services'), orderBy('createdAt', 'desc'));
@@ -134,7 +136,10 @@ export default function ServicesPage() {
             <div key={ad.id} className="bg-[#141416] p-6 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all group">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-start gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-bold overflow-hidden shrink-0">
+                  <div 
+                    onClick={() => showProfile(ad.authorId, { displayName: ad.authorName, photoURL: ad.authorPhoto })}
+                    className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-bold overflow-hidden shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform border-2 border-transparent hover:border-indigo-500/50"
+                  >
                     {ad.authorPhoto ? (
                       <img src={ad.authorPhoto} alt="Avatar" className="w-full h-full object-cover" />
                     ) : (
@@ -142,7 +147,12 @@ export default function ServicesPage() {
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{ad.authorName || `Provider ${ad.authorId.substring(0, 4)}`}</p>
+                    <p 
+                      onClick={() => showProfile(ad.authorId, { displayName: ad.authorName, photoURL: ad.authorPhoto })}
+                      className="text-sm font-semibold text-white hover:text-indigo-400 cursor-pointer transition-colors truncate"
+                    >
+                      {ad.authorName || `Provider ${ad.authorId.substring(0, 4)}`}
+                    </p>
                     <p className="text-xs text-slate-400">{ad.createdAt ? new Date(ad.createdAt.toMillis()).toLocaleString() : 'Just now'}</p>
                   </div>
                 </div>

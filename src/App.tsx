@@ -4,10 +4,10 @@
  */
 
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { APIProvider } from '@vis.gl/react-google-maps';
 import { AuthProvider } from './components/AuthProvider';
 import { LanguageProvider } from './components/LanguageProvider';
 import { ThemeProvider } from './components/ThemeProvider';
+import { UserProfileModalProvider } from './components/UserProfileModal';
 import Layout from './components/Layout';
 import ActivitiesPage from './pages/ActivitiesPage';
 import CommunityPage from './pages/CommunityPage';
@@ -16,18 +16,12 @@ import ProfilePage from './pages/ProfilePage';
 import ServicesPage from './pages/ServicesPage';
 import GuidePage from './pages/GuidePage';
 
-const API_KEY =
-  process.env.GOOGLE_MAPS_PLATFORM_KEY ||
-  (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY ||
-  (globalThis as any).GOOGLE_MAPS_PLATFORM_KEY ||
-  '';
-
 export default function App() {
   return (
-    <APIProvider apiKey={API_KEY} version="weekly">
-      <ThemeProvider>
-        <LanguageProvider>
-          <AuthProvider>
+    <ThemeProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <UserProfileModalProvider>
             <Router>
               <Layout>
                 <Routes>
@@ -40,9 +34,9 @@ export default function App() {
                 </Routes>
               </Layout>
             </Router>
-          </AuthProvider>
-        </LanguageProvider>
-      </ThemeProvider>
-    </APIProvider>
+          </UserProfileModalProvider>
+        </AuthProvider>
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }

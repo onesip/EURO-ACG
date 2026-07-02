@@ -3,6 +3,7 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
+import { useUserProfileModal } from './UserProfileModal';
 import { Send } from 'lucide-react';
 
 export default function CommentSection({ parentCollection, parentId }: { parentCollection: 'activities' | 'posts' | 'services', parentId: string }) {
@@ -10,6 +11,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
   const [content, setContent] = useState('');
   const { user, profile } = useAuth();
   const { t } = useLanguage();
+  const { showProfile } = useUserProfileModal();
 
   useEffect(() => {
     const q = query(collection(db, parentCollection, parentId, 'comments'), orderBy('createdAt', 'asc'));
@@ -73,7 +75,11 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
                     zIndex: 10
                   }}
                 >
-                  <div className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0">
+                  <div 
+                    onClick={() => showProfile(comment.authorId, { displayName: comment.authorName, photoURL: comment.authorPhoto })}
+                    className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0 cursor-pointer hover:scale-110 active:scale-95 transition-transform"
+                    title={comment.authorName}
+                  >
                     {comment.authorPhoto ? <img src={comment.authorPhoto} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-700 text-[10px] flex items-center justify-center text-white">{comment.authorName?.charAt(0) || 'U'}</div>}
                   </div>
                   <span className="text-sm font-medium text-white shadow-sm">{comment.content}</span>
@@ -84,12 +90,20 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
             <div className="space-y-3">
               {comments.map(comment => (
                 <div key={comment.id} className="flex gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-800 flex-shrink-0 flex items-center justify-center text-xs font-bold text-slate-400 overflow-hidden">
+                  <div 
+                    onClick={() => showProfile(comment.authorId, { displayName: comment.authorName, photoURL: comment.authorPhoto })}
+                    className="w-8 h-8 rounded-full bg-slate-800 flex-shrink-0 flex items-center justify-center text-xs font-bold text-slate-400 overflow-hidden cursor-pointer hover:scale-105 active:scale-95 transition-transform shadow-[0_0_8px_rgba(99,102,241,0.1)] border border-transparent hover:border-indigo-500/50"
+                  >
                       {comment.authorPhoto ? <img src={comment.authorPhoto} className="w-full h-full object-cover" /> : comment.authorName?.charAt(0) || 'U'}
                   </div>
                   <div>
                     <div className="bg-white/5 rounded-2xl rounded-tl-none px-4 py-2">
-                      <p className="text-xs font-medium text-slate-300 mb-0.5">{comment.authorName}</p>
+                      <p 
+                        onClick={() => showProfile(comment.authorId, { displayName: comment.authorName, photoURL: comment.authorPhoto })}
+                        className="text-xs font-medium text-slate-300 hover:text-indigo-400 cursor-pointer transition-colors mb-0.5"
+                      >
+                        {comment.authorName}
+                      </p>
                       <p className="text-sm text-slate-200">{comment.content}</p>
                     </div>
                     <p className="text-[10px] text-slate-500 mt-1 ml-2">
