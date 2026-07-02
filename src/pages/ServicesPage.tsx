@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
+// import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
@@ -8,9 +9,12 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
+import UserAvatar from '../components/UserAvatar';
+import CommentCount from '../components/CommentCount';
 import { ServiceAd, ServiceType } from '../types';
 import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { isQuotaExceeded } from '../lib/quota';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
@@ -34,12 +38,13 @@ const SERVICE_TABS: { id: ServiceType; icon: any }[] = [
 
 export default function ServicesPage() {
   const [ads, setAds] = useState<ServiceAd[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ServiceType>('photography');
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [editingAd, setEditingAd] = useState<ServiceAd | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const { user, profile } = useAuth();
+  const { user, profile, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
@@ -74,22 +79,44 @@ export default function ServicesPage() {
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'services'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const adsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as ServiceAd[];
-      
-      // Sort: Pinned first, then by createdAt desc
-      adsData.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return 0; // maintain relative order from query
-      });
-      setAds(adsData);
-    });
-    return unsubscribe;
+    const cached = localStorage.getItem('cached_services');
+    if (cached) {
+      try {
+        setAds(JSON.parse(cached));
+      } catch (_) {}
+    }
+    setIsLoading(false);
+
+    const fetchData = async () => {
+      if (isQuotaExceeded()) return;
+      try {
+        const q = query(collection(db, 'services'), limit(20));
+        const snapshot = await getDocs(q);
+        
+        const adsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as ServiceAd[];
+        
+        // Sort: Pinned first, then by createdAt desc
+        adsData.sort((a, b) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          const aTime = a.createdAt?.toMillis() || 0;
+          const bTime = b.createdAt?.toMillis() || 0;
+          return bTime - aTime;
+        });
+        setAds(adsData);
+        localStorage.setItem('cached_services', JSON.stringify(adsData));
+      } catch (error: any) {
+        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+          setQuotaExceeded(true);
+        } else {
+          console.error("Services fetch error:", error);
+        }
+      }
+    };
+    fetchData();
   }, [user]);
 
   const filteredAds = ads.filter(ad => {
@@ -167,13 +194,19 @@ export default function ServicesPage() {
       </div>
 
       <div className="grid gap-4">
-        {filteredAds.map((ad) => {
-          const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === ad.country);
-          return (
-            <div key={ad.id} className={cn(
-              "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
-              ad.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
-            )}>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500 animate-pulse">
+            <Sparkles className="w-8 h-8 mb-2 opacity-20" />
+            <p className="text-sm font-medium">{lang === 'zh' ? '正在连接产粮区...' : 'Connecting to services...'}</p>
+          </div>
+        ) : filteredAds.length > 0 ? (
+          filteredAds.map((ad) => {
+            const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === ad.country);
+            return (
+              <div key={ad.id} className={cn(
+                "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
+                ad.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
+              )}>
               {ad.isPinned && (
                 <div className="absolute -top-2.5 -left-2.5 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg z-10 flex items-center gap-1">
                   <Pin className="w-3.5 h-3.5 fill-white" />
@@ -182,16 +215,12 @@ export default function ServicesPage() {
               )}
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-start gap-3">
-                  <div 
+                  <UserAvatar 
+                    uid={ad.authorId} 
+                    photoURL={ad.authorPhoto} 
+                    displayName={ad.authorName} 
                     onClick={() => showProfile(ad.authorId, { displayName: ad.authorName, photoURL: ad.authorPhoto })}
-                    className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-bold overflow-hidden shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform border-2 border-transparent hover:border-indigo-500/50"
-                  >
-                    {ad.authorPhoto ? (
-                      <img src={ad.authorPhoto} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      ad.authorName ? ad.authorName.charAt(0) : ad.authorId.substring(0, 2).toUpperCase()
-                    )}
-                  </div>
+                  />
                   <div className="min-w-0">
                     <p 
                       onClick={() => showProfile(ad.authorId, { displayName: ad.authorName, photoURL: ad.authorPhoto })}
@@ -332,13 +361,15 @@ export default function ServicesPage() {
 
               {/* Reviews/Comments */}
               <div className="mt-4 pt-4 border-t border-white/5">
-                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Reviews & Comments</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                  Reviews & Comments <CommentCount parentCollection="services" parentId={ad.id} />
+                </h4>
                 <CommentSection parentCollection="services" parentId={ad.id} />
               </div>
             </div>
           );
-        })}
-        {filteredAds.length === 0 && (
+        })
+        ) : (
           <div className="text-center py-12 text-slate-400 bg-[#141416] rounded-2xl border border-white/5">
             {lang === 'zh' ? `该地区暂无此分类服务，快来上架第一个服务吧！` : `No services registered in this region category yet.`}
           </div>

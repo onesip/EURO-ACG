@@ -1,24 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+// import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { useUserProfileModal } from './UserProfileModal';
+import { isQuotaExceeded } from '../lib/quota';
 import { Send, MessageCircle } from 'lucide-react';
 
 export default function CommentSection({ parentCollection, parentId }: { parentCollection: 'activities' | 'posts' | 'services', parentId: string }) {
   const [comments, setComments] = useState<any[]>([]);
   const [content, setContent] = useState('');
-  const { user, profile } = useAuth();
-  const { t } = useLanguage();
+  const { user, profile, setQuotaExceeded } = useAuth();
+  const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
   useEffect(() => {
-    const q = query(collection(db, parentCollection, parentId, 'comments'), orderBy('createdAt', 'asc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-    return unsubscribe;
+    const cached = localStorage.getItem(`cached_comments_${parentCollection}_${parentId}`);
+    if (cached) {
+      try {
+        setComments(JSON.parse(cached));
+      } catch (_) {}
+    }
+
+    const fetchData = async () => {
+      if (isQuotaExceeded()) return;
+      try {
+        const q = query(collection(db, parentCollection, parentId, 'comments'));
+        const snapshot = await getDocs(q);
+        
+        const commentsData = snapshot.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        })).sort((a: any, b: any) => {
+          const aTime = a.createdAt?.toMillis() || 0;
+          const bTime = b.createdAt?.toMillis() || 0;
+          return aTime - bTime;
+        });
+        setComments(commentsData);
+        localStorage.setItem(`cached_comments_${parentCollection}_${parentId}`, JSON.stringify(commentsData));
+      } catch (error: any) {
+        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+          setQuotaExceeded(true);
+        } else {
+          console.error("Comment fetch error:", error);
+        }
+      }
+    };
+    fetchData();
   }, [parentCollection, parentId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,14 +76,14 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
         <div className="flex items-center gap-1.5 text-slate-400">
           <MessageCircle className="w-3.5 h-3.5" />
           <span className="text-xs font-bold uppercase tracking-wider">
-            {t('common.lang') === 'zh' ? '吐槽' : 'Comments'} ({comments.length})
+            {t('com.comment')} ({comments.length})
           </span>
         </div>
         <button 
           onClick={() => setIsDanmaku(!isDanmaku)}
           className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all border ${isDanmaku ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' : 'bg-white/5 text-slate-500 border-white/5'}`}
         >
-          {isDanmaku ? '弹幕：开' : '弹幕：关'}
+          {isDanmaku ? (lang === 'zh' ? '弹幕：开' : 'Danmaku: On') : (lang === 'zh' ? '弹幕：关' : 'Danmaku: Off')}
         </button>
       </div>
 

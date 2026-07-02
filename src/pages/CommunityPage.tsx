@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
+// import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
+import { isQuotaExceeded } from '../lib/quota';
 import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
+import UserAvatar from '../components/UserAvatar';
+import CommentCount from '../components/CommentCount';
 import { Post, PostType } from '../types';
 import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -34,13 +37,14 @@ const POST_TABS: { id: PostType; icon: any }[] = [
 
 export default function CommunityPage() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<PostType>('social');
   const [activeSubCategory, setActiveSubCategory] = useState<string>('all');
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const { user, profile } = useAuth();
+  const { user, profile, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
@@ -75,23 +79,47 @@ export default function CommunityPage() {
   };
 
   useEffect(() => {
-    const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const postsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Post[];
-      
-      // Sort: Pinned posts first, then by createdAt
-      const sortedPosts = [...postsData].sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return 0; // maintain relative order from query
-      });
+    const cached = localStorage.getItem('cached_community_posts');
+    if (cached) {
+      try {
+        setPosts(JSON.parse(cached));
+      } catch (_) {}
+    }
+    setIsLoading(false);
 
-      setPosts(sortedPosts);
-    });
-    return unsubscribe;
+    const fetchData = async () => {
+      if (isQuotaExceeded()) return;
+      try {
+        // Remove server-side orderBy to avoid index issues and handle missing createdAt
+        const q = query(collection(db, 'posts'), limit(20));
+        const snapshot = await getDocs(q);
+        
+        const postsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Post[];
+        
+        // Sort: Pinned posts first, then by createdAt desc
+        const sortedPosts = [...postsData].sort((a, b) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          
+          const aTime = a.createdAt?.toMillis() || 0;
+          const bTime = b.createdAt?.toMillis() || 0;
+          return bTime - aTime;
+        });
+
+        setPosts(sortedPosts);
+        localStorage.setItem('cached_community_posts', JSON.stringify(sortedPosts));
+      } catch (error: any) {
+        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+          setQuotaExceeded(true);
+        } else {
+          console.error("Community posts fetch error:", error);
+        }
+      }
+    };
+    fetchData();
   }, [user]);
 
   const filteredPosts = posts.filter(p => {
@@ -203,13 +231,19 @@ export default function CommunityPage() {
       )}
 
       <div className="grid gap-4">
-        {filteredPosts.map((post) => {
-          const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === post.country);
-          return (
-            <div key={post.id} className={cn(
-              "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
-              post.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
-            )}>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500 animate-pulse">
+            <Sparkles className="w-8 h-8 mb-2 opacity-20" />
+            <p className="text-sm font-medium">{lang === 'zh' ? '正在连接摸鱼广场...' : 'Connecting to square...'}</p>
+          </div>
+        ) : filteredPosts.length > 0 ? (
+          filteredPosts.map((post) => {
+            const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === post.country);
+            return (
+              <div key={post.id} className={cn(
+                "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
+                post.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
+              )}>
               {post.isPinned && (
                 <div className="absolute -top-2.5 -left-2.5 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg z-10 flex items-center gap-1">
                   <Pin className="w-3.5 h-3.5 fill-white" />
@@ -218,16 +252,12 @@ export default function CommunityPage() {
               )}
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-start gap-3">
-                  <div 
+                  <UserAvatar 
+                    uid={post.authorId} 
+                    photoURL={post.authorPhoto} 
+                    displayName={post.authorName} 
                     onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
-                    className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-bold overflow-hidden shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-all shadow-[0_0_12px_rgba(99,102,241,0.1)] border-2 border-transparent hover:border-indigo-500/50"
-                  >
-                    {post.authorPhoto ? (
-                      <img src={post.authorPhoto} alt="Avatar" className="w-full h-full object-cover" />
-                    ) : (
-                      post.authorName ? post.authorName.charAt(0) : post.authorId.substring(0, 2).toUpperCase()
-                    )}
-                  </div>
+                  />
                   <div className="min-w-0">
                     <p 
                       onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
@@ -270,7 +300,7 @@ export default function CommunityPage() {
                     <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likes?.length || 0})</span>
                   </button>
                   <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
-                    <MessageCircle className="w-4 h-4" /> {t('com.comment')}
+                    <MessageCircle className="w-4 h-4" /> {t('com.comment')} <CommentCount parentCollection="posts" parentId={post.id} />
                   </button>
                 </div>
 
@@ -374,8 +404,8 @@ export default function CommunityPage() {
               <CommentSection parentCollection="posts" parentId={post.id} />
             </div>
           );
-        })}
-        {filteredPosts.length === 0 && (
+        })
+        ) : (
           <div className="text-center py-12 text-slate-400 bg-[#141416] rounded-2xl border border-white/5">
             {lang === 'zh' ? `该国家频道或分类目前没有发言，快来发第一个贴吧！` : `No posts in this channel yet. Share your thoughts!`}
           </div>

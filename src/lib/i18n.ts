@@ -65,6 +65,10 @@ export const translations: Record<Language, Record<string, string>> = {
     // Comments
     'comment.placeholder': 'Add a comment...',
     'comment.loginToComment': 'Sign in to comment',
+    'comment.count': 'Comments',
+    
+    // Common
+    'common.lang': 'en',
     
     // Roles
     'role.fan': 'Anime Fan',
@@ -176,6 +180,10 @@ export const translations: Record<Language, Record<string, string>> = {
     // Comments
     'comment.placeholder': '发条弹幕吐槽一下...',
     'comment.loginToComment': '登录后发射弹幕',
+    'comment.count': '条评论',
+    
+    // Common
+    'common.lang': 'zh',
     
     // Roles
     'role.fan': '二次元萌新/老二次元',

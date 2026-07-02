@@ -223,7 +223,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   };
 
   const getGenderIcon = (gender?: Gender) => {
-    const iconClass = "flex items-center justify-center leading-none -mt-0.5";
+    const iconClass = "flex items-center justify-center leading-none";
     switch (gender) {
       case 'male': return <span className={cn("text-blue-400", iconClass)} title="Male">♂️</span>;
       case 'female': return <span className={cn("text-pink-400", iconClass)} title="Female">♀️</span>;

@@ -9,7 +9,7 @@ import { cn } from '../lib/utils';
 import { useTheme, ACG_THEMES } from './ThemeProvider';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, profile } = useAuth();
+  const { user, profile, isQuotaExceeded } = useAuth();
   const location = useLocation();
   const { t, lang, setLang } = useLanguage();
   const { activeTheme, setThemeById } = useTheme();
@@ -239,6 +239,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
              </Link>
            </div>
         </div>
+        {isQuotaExceeded && (
+          <div className="mb-5 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-3 text-xs text-amber-400 animate-fadeIn shadow-lg shadow-amber-500/5">
+            <span className="text-base select-none">⚠️</span>
+            <div className="flex-1">
+              <p className="font-bold">
+                {lang === 'zh' ? '数据库每日电波能量已达上限 (Quota Exhausted)' : 'Database Daily Power Limit Reached'}
+              </p>
+              <p className="opacity-80 mt-1 leading-relaxed">
+                {lang === 'zh' 
+                  ? '目前正处于二次元离线保护模式。您可以继续流畅地查看和浏览所有的帖子、活动、集市和同好资料，但发布新内容、发表评论和点赞等写入功能可能会暂时提示受限。' 
+                  : 'Currently running in safe offline/cached mode. You can browse existing posts, activities, market items and user profiles, but writing functions like comments, likes or new posts are temporarily restricted.'}
+              </p>
+            </div>
+          </div>
+        )}
         {children}
       </main>
 

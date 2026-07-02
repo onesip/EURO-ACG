@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, addDoc, serverTimestamp, onSnapshot, where, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, query, addDoc, serverTimestamp, where, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
+// import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
@@ -8,16 +9,21 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
+import { isQuotaExceeded } from '../lib/quota';
+import UserAvatar from '../components/UserAvatar';
+import CommentCount from '../components/CommentCount';
 import { Post } from '../types';
 import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function MarketPage() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Post | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const { user, profile } = useAuth();
+  const { user, profile, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
@@ -52,27 +58,48 @@ export default function MarketPage() {
   };
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'posts'), 
-      where('type', '==', 'market')
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const postsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Post[];
-      
-      // Sort: Pinned first, then by createdAt desc
-      postsData.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        const aTime = a.createdAt?.toMillis() || 0;
-        const bTime = b.createdAt?.toMillis() || 0;
-        return bTime - aTime;
-      });
-      setPosts(postsData);
-    });
-    return unsubscribe;
+    const cached = localStorage.getItem('cached_market_posts');
+    if (cached) {
+      try {
+        setPosts(JSON.parse(cached));
+      } catch (_) {}
+    }
+    setIsLoading(false);
+
+    const fetchData = async () => {
+      if (isQuotaExceeded()) return;
+      try {
+        const q = query(
+          collection(db, 'posts'), 
+          where('type', '==', 'market'),
+          limit(20)
+        );
+        const snapshot = await getDocs(q);
+        
+        const postsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Post[];
+        
+        // Sort: Pinned first, then by createdAt desc
+        postsData.sort((a, b) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          const aTime = a.createdAt?.toMillis() || 0;
+          const bTime = b.createdAt?.toMillis() || 0;
+          return bTime - aTime;
+        });
+        setPosts(postsData);
+        localStorage.setItem('cached_market_posts', JSON.stringify(postsData));
+      } catch (error: any) {
+        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+          setQuotaExceeded(true);
+        } else {
+          console.error("Market posts fetch error:", error);
+        }
+      }
+    };
+    fetchData();
   }, [user]);
 
   return (
@@ -92,11 +119,17 @@ export default function MarketPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {posts.map((post) => (
-          <div key={post.id} className={cn(
-            "bg-[#141416] p-6 rounded-2xl border transition-all flex flex-col h-full group relative",
-            post.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
-          )}>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500 animate-pulse col-span-full">
+            <Sparkles className="w-8 h-8 mb-2 opacity-20" />
+            <p className="text-sm font-medium">{lang === 'zh' ? '正在连接集市...' : 'Connecting to market...'}</p>
+          </div>
+        ) : posts.length > 0 ? (
+          posts.map((post) => (
+            <div key={post.id} className={cn(
+              "bg-[#141416] p-6 rounded-2xl border transition-all flex flex-col h-full group relative",
+              post.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
+            )}>
             {post.isPinned && (
               <div className="absolute -top-2.5 -left-2.5 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg z-10 flex items-center gap-1">
                 <Pin className="w-3.5 h-3.5 fill-white" />
@@ -136,12 +169,21 @@ export default function MarketPage() {
                   <Heart className={cn("w-4 h-4 transition-transform active:scale-125 duration-200", user && post.likes?.includes(user.uid) ? "fill-rose-500/80 stroke-rose-400" : "")} /> 
                   <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likes?.length || 0})</span>
                 </button>
-                <button 
-                  onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
-                  className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
-                >
-                  {t('mkt.contact')}
-                </button>
+                <div className="flex items-center gap-2">
+                  <UserAvatar 
+                    uid={post.authorId} 
+                    photoURL={post.authorPhoto} 
+                    displayName={post.authorName} 
+                    size="sm"
+                    onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
+                  />
+                  <button 
+                    onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
+                    className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    {t('mkt.contact')} <CommentCount parentCollection="posts" parentId={post.id} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -219,8 +261,8 @@ export default function MarketPage() {
               <CommentSection parentCollection="posts" parentId={post.id} />
             </div>
           </div>
-        ))}
-        {posts.length === 0 && (
+        ))
+        ) : (
           <div className="col-span-full text-center py-12 text-slate-400 flex flex-col items-center">
             <PackageSearch className="w-12 h-12 text-slate-300 mb-3" />
             <p>{t('mkt.empty')}</p>

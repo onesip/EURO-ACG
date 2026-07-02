@@ -7,9 +7,13 @@ import LocationInput from '../components/LocationInput';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
+import { isQuotaExceeded } from '../lib/quota';
+import UserAvatar from '../components/UserAvatar';
+import CommentCount from '../components/CommentCount';
 import { Activity } from '../types';
 import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
-import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
+// import { onSnapshot } from 'firebase/firestore';
 import { cn } from '../lib/utils';
 
 const EUROPEAN_COUNTRIES = [
@@ -27,33 +31,57 @@ const EUROPEAN_COUNTRIES = [
 
 export default function ActivitiesPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const { user, profile } = useAuth();
+  const { user, profile, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
   useEffect(() => {
-    const q = query(collection(db, 'activities'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const activitiesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Activity[];
-      
-      // Sort: Pinned first, then by createdAt desc
-      activitiesData.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return 0; // maintain relative order from query
-      });
-      setActivities(activitiesData);
-    });
-    return unsubscribe;
+    const cached = localStorage.getItem('cached_activities');
+    if (cached) {
+      try {
+        setActivities(JSON.parse(cached));
+      } catch (_) {}
+    }
+    setIsLoading(false);
+
+    const fetchData = async () => {
+      if (isQuotaExceeded()) return;
+      try {
+        const q = query(collection(db, 'activities'), limit(20));
+        const snapshot = await getDocs(q);
+        
+        const activitiesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as Activity[];
+        
+        // Sort: Pinned first, then by createdAt desc
+        activitiesData.sort((a, b) => {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          const aTime = a.createdAt?.toMillis() || 0;
+          const bTime = b.createdAt?.toMillis() || 0;
+          return bTime - aTime;
+        });
+
+        setActivities(activitiesData);
+        localStorage.setItem('cached_activities', JSON.stringify(activitiesData));
+      } catch (error: any) {
+        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+          setQuotaExceeded(true);
+        } else {
+          console.error("Activities fetch error:", error);
+        }
+      }
+    };
+    fetchData();
   }, [user]);
 
   const handlePin = async (activityId: string, currentlyPinned: boolean = false) => {
@@ -156,15 +184,21 @@ export default function ActivitiesPage() {
       </div>
 
       <div className="grid gap-4">
-        {filteredActivities.map((activity) => {
-          const isParticipant = activity.participants?.some(p => p.uid === user?.uid);
-          const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === activity.country);
-          
-          return (
-            <div key={activity.id} className={cn(
-              "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
-              activity.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
-            )}>
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-20 text-slate-500 animate-pulse">
+            <Sparkles className="w-8 h-8 mb-2 opacity-20" />
+            <p className="text-sm font-medium">{lang === 'zh' ? '正在连接面基行动...' : 'Connecting to activities...'}</p>
+          </div>
+        ) : filteredActivities.length > 0 ? (
+          filteredActivities.map((activity) => {
+            const isParticipant = activity.participants?.some(p => p.uid === user?.uid);
+            const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === activity.country);
+            
+            return (
+              <div key={activity.id} className={cn(
+                "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
+                activity.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
+              )}>
               {activity.isPinned && (
                 <div className="absolute -top-2.5 -left-2.5 bg-indigo-600 text-white p-1.5 rounded-xl shadow-lg z-10 flex items-center gap-1">
                   <Pin className="w-3.5 h-3.5 fill-white" />
@@ -210,18 +244,16 @@ export default function ActivitiesPage() {
               <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-4">
                 <div className="flex -space-x-2 overflow-hidden">
                   {activity.participants?.slice(0, 5).map((p, i) => (
-                    <div 
+                    <UserAvatar 
                       key={i} 
+                      uid={p.uid} 
+                      photoURL={p.photoURL} 
+                      displayName={p.displayName} 
+                      size="sm" 
+                      showGender={false}
+                      className="border-2 border-[#141416] hover:border-indigo-500 hover:scale-110 hover:z-25"
                       onClick={() => showProfile(p.uid, { displayName: p.displayName, photoURL: p.photoURL })}
-                      className="inline-block w-8 h-8 rounded-full border-2 border-[#141416] hover:border-indigo-500 bg-indigo-900 flex items-center justify-center text-xs font-medium text-indigo-200 overflow-hidden cursor-pointer hover:scale-110 active:scale-95 transition-all duration-200 hover:z-25 relative" 
-                      title={p.displayName || 'User'}
-                    >
-                      {p.photoURL ? (
-                        <img src={p.photoURL} alt={p.displayName} className="w-full h-full object-cover" />
-                      ) : (
-                        (p.displayName || 'U').charAt(0)
-                      )}
-                    </div>
+                    />
                   ))}
                   {(activity.participants?.length || 0) > 5 && (
                     <div className="inline-block w-8 h-8 rounded-full border-2 border-[#141416] bg-slate-800 flex items-center justify-center text-xs font-medium text-slate-300 z-10 relative">
@@ -303,21 +335,22 @@ export default function ActivitiesPage() {
 
                   <button
                     onClick={() => handleJoin(activity.id, !isParticipant)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
                       isParticipant 
                         ? 'bg-white/5 text-slate-300 hover:bg-white/10' 
                         : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
                     }`}
                   >
                     {isParticipant ? t('act.cancelJoin') : t('act.join')}
+                    <CommentCount parentCollection="activities" parentId={activity.id} />
                   </button>
                 </div>
               
               <CommentSection parentCollection="activities" parentId={activity.id} />
             </div>
           );
-        })}
-        {filteredActivities.length === 0 && (
+        })
+        ) : (
           <div className="text-center py-12 text-slate-400 bg-[#141416] rounded-2xl border border-white/5">
             {lang === 'zh' ? `该频道目前没有活动，快来发布第一个吧！` : `No activities in this channel yet. Be the first to create one!`}
           </div>
