@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, addDoc, serverTimestamp, onSnapshot, where, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, addDoc, serverTimestamp, onSnapshot, where, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
@@ -9,7 +9,7 @@ import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { Post } from '../types';
-import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2 } from 'lucide-react';
+import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function MarketPage() {
@@ -20,6 +20,23 @@ export default function MarketPage() {
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
+
+  const handleLike = async (postId: string, currentLikes: string[] = []) => {
+    if (!user) {
+      alert(lang === 'zh' ? '请先登录以进行贴贴！' : 'Please login to like posts!');
+      return;
+    }
+    const postRef = doc(db, 'posts', postId);
+    const hasLiked = currentLikes.includes(user.uid);
+    
+    try {
+      await updateDoc(postRef, { 
+        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
+      });
+    } catch (err) {
+      console.error("Failed to like post", err);
+    }
+  };
 
   useEffect(() => {
     const q = query(
@@ -82,30 +99,26 @@ export default function MarketPage() {
             </div>
 
             <div className="flex items-center justify-between pt-4 border-t border-white/5">
-              <div className="flex items-center gap-2">
-                <div 
-                  onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
-                  className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-[10px] font-bold overflow-hidden shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform border border-transparent hover:border-indigo-500/50"
-                >
-                  {post.authorPhoto ? (
-                    <img src={post.authorPhoto} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    post.authorName ? post.authorName.charAt(0) : post.authorId.substring(0, 2).toUpperCase()
+              <div className="flex items-center gap-6">
+                <button 
+                  onClick={() => handleLike(post.id, post.likes)}
+                  className={cn(
+                    "flex items-center gap-1.5 transition-all text-sm font-medium duration-200",
+                    user && post.likes?.includes(user.uid) 
+                      ? "text-rose-400 hover:text-rose-500 font-semibold" 
+                      : "text-slate-400 hover:text-rose-400"
                   )}
-                </div>
-                <span 
-                  onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
-                  className="text-xs font-medium text-slate-400 hover:text-indigo-400 cursor-pointer transition-colors truncate max-w-[120px]"
                 >
-                  {post.authorName || t('mkt.seller')}
-                </span>
+                  <Heart className={cn("w-4 h-4 transition-transform active:scale-125 duration-200", user && post.likes?.includes(user.uid) ? "fill-rose-500/80 stroke-rose-400" : "")} /> 
+                  <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likes?.length || 0})</span>
+                </button>
+                <button 
+                  onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
+                  className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
+                >
+                  {t('mkt.contact')}
+                </button>
               </div>
-              <button 
-                onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
-                className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
-              >
-                {t('mkt.contact')}
-              </button>
             </div>
 
             {user && post.authorId === user.uid && (
@@ -231,6 +244,7 @@ function ComposeMarketModal({ editItem, onClose }: { editItem?: Post, onClose: (
           authorId: user.uid,
           authorName: profile?.displayName || 'User',
           authorPhoto: profile?.photoURL || '',
+          likes: [],
           createdAt: serverTimestamp()
         });
       }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { UserRole } from '../types';
+import { UserRole, Gender } from '../types';
 import { Save, LogIn, Sparkles, MapPin, Palette } from 'lucide-react';
 import { loginWithGoogle } from '../lib/firebase';
 import ImageUpload from '../components/ImageUpload';
@@ -33,6 +33,7 @@ export default function ProfilePage() {
     photoURL: '',
     bio: '',
     role: 'other' as UserRole,
+    gender: 'prefer-not-to-say' as Gender,
     favorites: { anime: '', characters: '', cp: '' },
     socials: { x: '', instagram: '', xiaohongshu: '', wechat: '', qq: '' },
     residentCountries: [] as string[],
@@ -46,6 +47,7 @@ export default function ProfilePage() {
         photoURL: profile.photoURL || '',
         bio: profile.bio || '',
         role: profile.role || 'other',
+        gender: profile.gender || 'prefer-not-to-say',
         favorites: {
           anime: profile.favorites?.anime || '',
           characters: profile.favorites?.characters || '',
@@ -251,6 +253,22 @@ export default function ProfilePage() {
                 <option value="photographer" className="bg-slate-900 text-white">{t('role.photographer')}</option>
                 <option value="makeup" className="bg-slate-900 text-white">{t('role.makeup')}</option>
                 <option value="other" className="bg-slate-900 text-white">{t('role.other')}</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {lang === 'zh' ? '性别 (必填)' : 'Gender (Required)'} <span className="text-rose-500 font-bold">*</span>
+              </label>
+              <select 
+                value={formData.gender}
+                onChange={e => setFormData({...formData, gender: e.target.value as Gender})}
+                className="w-full px-3 py-2 bg-slate-800 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none"
+              >
+                <option value="male" className="bg-slate-900 text-white">{lang === 'zh' ? '男 (Male)' : 'Male'}</option>
+                <option value="female" className="bg-slate-900 text-white">{lang === 'zh' ? '女 (Female)' : 'Female'}</option>
+                <option value="non-binary" className="bg-slate-900 text-white">{lang === 'zh' ? '非二元 (Non-binary)' : 'Non-binary'}</option>
+                <option value="other" className="bg-slate-900 text-white">{lang === 'zh' ? '其他 (Other)' : 'Other'}</option>
+                <option value="prefer-not-to-say" className="bg-slate-900 text-white">{lang === 'zh' ? '保密 (Secret)' : 'Prefer not to say'}</option>
               </select>
             </div>
             <div className="sm:col-span-2">

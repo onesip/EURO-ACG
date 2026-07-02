@@ -1,4 +1,5 @@
 export type UserRole = 'coser' | 'photographer' | 'makeup' | 'fan' | 'other';
+export type Gender = 'male' | 'female' | 'non-binary' | 'other' | 'prefer-not-to-say';
 export type ActivityType = 'meetup' | 'convention' | 'photoshoot';
 export type PostType = 'market' | 'tips' | 'sos' | 'social' | 'drama';
 export type ServiceType = 'photography' | 'makeup' | 'wig' | 'other';
@@ -9,6 +10,7 @@ export interface UserProfile {
   photoURL: string;
   bio: string;
   role: UserRole;
+  gender?: Gender;
   favorites: {
     anime: string;
     characters: string;
@@ -23,6 +25,25 @@ export interface UserProfile {
   };
   residentCountries?: string[];
   visitCountries?: string[];
+}
+
+export interface UserReview {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorPhoto: string;
+  content: string;
+  createdAt: any;
+}
+
+export interface FriendRequest {
+  id: string;
+  fromId: string;
+  fromName: string;
+  fromPhoto: string;
+  toId: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  createdAt: any;
 }
 
 export interface Activity {

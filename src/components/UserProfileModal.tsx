@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, updateDoc, setDoc, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserRole, Gender, UserReview, FriendRequest } from '../types';
 import { useLanguage } from './LanguageProvider';
+import { useAuth } from './AuthProvider';
 import { 
   X, MapPin, Sparkles, Heart, BookOpen, Camera, Palette, 
-  Smile, Copy, Check, ExternalLink, Globe, Star, Mail, Award, Compass, RefreshCw
+  Smile, Copy, Check, ExternalLink, Globe, Star, Mail, Award, Compass, RefreshCw,
+  UserPlus, UserMinus, UserCheck, MessageSquare, Send
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import PostContent from './PostContent';
@@ -45,14 +47,26 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [fallback, setFallback] = useState<{ displayName?: string; photoURL?: string }>({});
-  const { lang } = useLanguage();
+  
+  // Friend System State
+  const [friendStatus, setFriendStatus] = useState<'none' | 'pending_sent' | 'pending_received' | 'friends'>('none');
+  const [friendRequestId, setFriendRequestId] = useState<string | null>(null);
+  
+  // Review System State
+  const [reviews, setReviews] = useState<UserReview[]>([]);
+  const [newReview, setNewReview] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  const { user, profile: currentUserProfile } = useAuth();
+  const { t, lang } = useLanguage();
 
   const handleClose = () => {
     setIsOpen(false);
-    // Reset profileUid so that clicking the same user again triggers useEffect
     setTimeout(() => {
       setProfileUid(null);
       setProfile(null);
+      setReviews([]);
+      setFriendStatus('none');
     }, 300);
     if (window.history.state?.modal === 'profile') {
       window.history.back();
@@ -62,7 +76,8 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   const showProfile = (uid: string, fallbackData?: { displayName?: string; photoURL?: string }) => {
     setProfileUid(uid);
     setFallback(fallbackData || {});
-    setProfile(null); // Clear previous profile immediately
+    setProfile(null);
+    setReviews([]);
     setIsOpen(true);
     window.history.pushState({ modal: 'profile' }, '');
   };
@@ -103,7 +118,92 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
     };
 
     fetchProfileData();
-  }, [profileUid]);
+
+    // Fetch Reviews
+    const reviewsRef = collection(db, 'users', profileUid, 'reviews');
+    const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'));
+    const unsubReviews = onSnapshot(qReviews, (snap) => {
+      setReviews(snap.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview));
+    });
+
+    // Check Friend Status
+    let unsubFriends = () => {};
+    if (user && user.uid !== profileUid) {
+      const q1 = query(collection(db, 'friendRequests'), where('fromId', '==', user.uid), where('toId', '==', profileUid));
+      const q2 = query(collection(db, 'friendRequests'), where('fromId', '==', profileUid), where('toId', '==', user.uid));
+      
+      const unsub1 = onSnapshot(q1, (snap) => {
+        if (!snap.empty) {
+          const req = snap.docs[0].data() as FriendRequest;
+          setFriendRequestId(snap.docs[0].id);
+          if (req.status === 'accepted') setFriendStatus('friends');
+          else setFriendStatus('pending_sent');
+        }
+      });
+      const unsub2 = onSnapshot(q2, (snap) => {
+        if (!snap.empty) {
+          const req = snap.docs[0].data() as FriendRequest;
+          setFriendRequestId(snap.docs[0].id);
+          if (req.status === 'accepted') setFriendStatus('friends');
+          else setFriendStatus('pending_received');
+        }
+      });
+      unsubFriends = () => { unsub1(); unsub2(); };
+    }
+
+    return () => {
+      unsubReviews();
+      unsubFriends();
+    };
+  }, [profileUid, user]);
+
+  const handleAddFriend = async () => {
+    if (!user || !profileUid || !currentUserProfile) return;
+    try {
+      await addDoc(collection(db, 'friendRequests'), {
+        fromId: user.uid,
+        fromName: currentUserProfile.displayName,
+        fromPhoto: currentUserProfile.photoURL,
+        toId: profileUid,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAcceptFriend = async () => {
+    if (!friendRequestId || !user || !profileUid) return;
+    try {
+      await updateDoc(doc(db, 'friendRequests', friendRequestId), { status: 'accepted' });
+      // Also add to friends subcollection for both
+      await setDoc(doc(db, 'users', user.uid, 'friends', profileUid), { uid: profileUid, createdAt: serverTimestamp() });
+      await setDoc(doc(db, 'users', profileUid, 'friends', user.uid), { uid: user.uid, createdAt: serverTimestamp() });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !profileUid || !newReview.trim() || !currentUserProfile) return;
+    setIsSubmittingReview(true);
+    try {
+      await addDoc(collection(db, 'users', profileUid, 'reviews'), {
+        authorId: user.uid,
+        authorName: currentUserProfile.displayName,
+        authorPhoto: currentUserProfile.photoURL,
+        content: newReview,
+        createdAt: serverTimestamp()
+      });
+      setNewReview('');
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   const handleCopy = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -120,6 +220,16 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
       other: { zh: '多重身份 / Other', en: 'Multi-Identity / Other', color: 'from-amber-500/20 to-orange-500/10 border-amber-500/30 text-amber-400', icon: <Compass className="w-3.5 h-3.5 text-amber-400" /> }
     };
     return roles[role] || roles.other;
+  };
+
+  const getGenderIcon = (gender?: Gender) => {
+    switch (gender) {
+      case 'male': return <span className="text-blue-400" title="Male">♂️</span>;
+      case 'female': return <span className="text-pink-400" title="Female">♀️</span>;
+      case 'non-binary': return <span className="text-purple-400" title="Non-binary">⚧️</span>;
+      case 'other': return <span className="text-amber-400" title="Other">✨</span>;
+      default: return null;
+    }
   };
 
   const currentProfile = profile || (profileUid ? {
@@ -140,7 +250,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
       
       <AnimatePresence>
         {isOpen && currentProfile && (
-          <div className="fixed inset-0 bg-[#0A0A0B]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-[#0A0A0B]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-hidden">
             {/* Backdrop click to close */}
             <div className="absolute inset-0" onClick={handleClose} />
             
@@ -185,20 +295,27 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                   </div>
 
                   <div className="space-y-1.5 flex-1 min-w-0 w-full">
-                    {/* Role Tag */}
-                    {loading ? (
-                      <div className="h-6 w-32 bg-white/5 rounded-full animate-pulse" />
-                    ) : roleInfo && (
-                      <div className={cn(
-                        "inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r rounded-full text-xs font-bold border",
-                        roleInfo.color
-                      )}>
-                        {roleInfo.icon}
-                        <span>{lang === 'zh' ? roleInfo.zh : roleInfo.en}</span>
-                      </div>
-                    )}
+                    {/* Role Tag & Gender */}
+                    <div className="flex items-center justify-center sm:justify-start gap-2">
+                      {loading ? (
+                        <div className="h-6 w-32 bg-white/5 rounded-full animate-pulse" />
+                      ) : roleInfo && (
+                        <div className={cn(
+                          "inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r rounded-full text-xs font-bold border",
+                          roleInfo.color
+                        )}>
+                          {roleInfo.icon}
+                          <span>{lang === 'zh' ? roleInfo.zh : roleInfo.en}</span>
+                        </div>
+                      )}
+                      {!loading && currentProfile.gender && (
+                        <div className="bg-white/5 border border-white/5 rounded-full px-2 py-1 text-sm flex items-center justify-center">
+                          {getGenderIcon(currentProfile.gender)}
+                        </div>
+                      )}
+                    </div>
 
-                    <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight truncate">
+                    <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight truncate flex items-center justify-center sm:justify-start gap-2">
                       {loading && !profile ? (
                         <div className="h-8 w-48 bg-white/5 rounded-lg animate-pulse" />
                       ) : currentProfile.displayName}
@@ -206,7 +323,43 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                   </div>
                 </div>
 
-                {/* Countries List (Resident & Planning) */}
+                {/* Friend Actions */}
+                {user && user.uid !== profileUid && !loading && (
+                  <div className="flex justify-center sm:justify-start gap-3">
+                    {friendStatus === 'none' && (
+                      <button 
+                        onClick={handleAddFriend}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
+                      >
+                        <UserPlus className="w-4 h-4" />
+                        {lang === 'zh' ? '加个好友' : 'Add Friend'}
+                      </button>
+                    )}
+                    {friendStatus === 'pending_sent' && (
+                      <button className="flex items-center gap-2 px-4 py-2 bg-white/10 text-slate-300 rounded-xl text-sm font-bold cursor-default">
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        {lang === 'zh' ? '已发送请求' : 'Request Sent'}
+                      </button>
+                    )}
+                    {friendStatus === 'pending_received' && (
+                      <button 
+                        onClick={handleAcceptFriend}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95 animate-pulse"
+                      >
+                        <UserCheck className="w-4 h-4" />
+                        {lang === 'zh' ? '通过好友请求' : 'Accept Friend'}
+                      </button>
+                    )}
+                    {friendStatus === 'friends' && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-sm font-bold">
+                        <Heart className="w-4 h-4 fill-indigo-400" />
+                        {lang === 'zh' ? '已是同好好友' : 'Friends'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Countries List */}
                 {(currentProfile.residentCountries?.length || 0) + (currentProfile.visitCountries?.length || 0) > 0 && (
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
                     {currentProfile.residentCountries?.map(code => {
@@ -267,13 +420,13 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                   </div>
                 )}
 
-                {/* Biography / Description */}
+                {/* Biography */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-white/5 pb-2">
                     <BookOpen className="w-4 h-4 text-indigo-400" />
                     <span>{lang === 'zh' ? '关于我 / 个人自述' : 'About Me / Biography'}</span>
                   </div>
-                  <div className="text-sm text-slate-300 bg-white/5 p-4 rounded-3xl border border-white/5 leading-relaxed max-h-48 overflow-y-auto scrollbar-thin">
+                  <div className="text-sm text-slate-300 bg-white/5 p-4 rounded-3xl border border-white/5 leading-relaxed max-h-48 overflow-y-auto scrollbar-none">
                     {currentProfile.bio ? (
                       <PostContent content={currentProfile.bio} />
                     ) : (
@@ -282,9 +435,71 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                   </div>
                 </div>
 
+                {/* User Reviews / Impressions (Impressions Section) */}
+                <div className="space-y-4 pt-4">
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-400 uppercase tracking-widest">
+                      <MessageSquare className="w-4 h-4" />
+                      <span>{lang === 'zh' ? '大家对TA的印象' : 'Member Impressions'}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-bold">{reviews.length} {lang === 'zh' ? '条印象' : 'Impressions'}</span>
+                  </div>
+
+                  {/* Impression Danmaku/List */}
+                  <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-none pr-1">
+                    {reviews.length === 0 ? (
+                      <div className="text-center py-6 bg-white/[0.02] rounded-2xl border border-dashed border-white/5">
+                        <p className="text-xs text-slate-500">{lang === 'zh' ? '暂无印象，快来留下TA给你的第一印象吧！' : 'No impressions yet. Be the first!'}</p>
+                      </div>
+                    ) : (
+                      reviews.map((rev) => (
+                        <div key={rev.id} className="bg-white/5 p-3 rounded-2xl border border-white/5 flex gap-3 group animate-fadeIn">
+                          <img src={rev.authorPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${rev.authorId}`} className="w-8 h-8 rounded-full shrink-0 border border-white/10" alt="Avatar" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <span className="text-[10px] font-bold text-slate-400 truncate">{rev.authorName}</span>
+                              <span className="text-[8px] text-slate-600 font-medium">{rev.createdAt?.toMillis() ? new Date(rev.createdAt.toMillis()).toLocaleDateString() : ''}</span>
+                            </div>
+                            <p className="text-xs text-slate-200 leading-relaxed">{rev.content}</p>
+                          </div>
+                          {user && (user.uid === rev.authorId || user.uid === profileUid) && (
+                            <button 
+                              onClick={() => deleteDoc(doc(db, 'users', profileUid, 'reviews', rev.id))}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-500 hover:text-rose-400 transition-all"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Add Review Form */}
+                  {user && user.uid !== profileUid && (
+                    <form onSubmit={handleSubmitReview} className="flex gap-2">
+                      <input 
+                        type="text"
+                        value={newReview}
+                        onChange={e => setNewReview(e.target.value)}
+                        placeholder={lang === 'zh' ? '留下你的印象 (如: 妆面超绝、神仙摄影...)' : 'Add an impression...'}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all"
+                        maxLength={100}
+                      />
+                      <button 
+                        type="submit"
+                        disabled={isSubmittingReview || !newReview.trim()}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white p-2 rounded-xl disabled:opacity-50 transition-colors"
+                      >
+                        <Send className="w-4 h-4" />
+                      </button>
+                    </form>
+                  )}
+                </div>
+
                 {/* Social Contacts Section */}
                 {currentProfile.socials && Object.values(currentProfile.socials).some(val => !!val) && (
-                  <div className="space-y-3">
+                  <div className="space-y-3 pt-4 border-t border-white/5">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-white/5 pb-2">
                       <Sparkles className="w-4 h-4 text-amber-400" />
                       <span>{lang === 'zh' ? '同好扩列渠道' : 'Social Connections'}</span>
@@ -295,7 +510,6 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                         const strValue = value as string;
                         if (!strValue) return null;
                         
-                        // Map social networks
                         const labels: Record<string, { name: string; prefix?: string; isUrl?: boolean }> = {
                           instagram: { name: 'Instagram', prefix: '@', isUrl: true },
                           x: { name: 'X / Twitter', prefix: '@', isUrl: true },

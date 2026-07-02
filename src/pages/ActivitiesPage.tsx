@@ -9,7 +9,7 @@ import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { Activity } from '../types';
 import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2 } from 'lucide-react';
-import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { cn } from '../lib/utils';
 
 const EUROPEAN_COUNTRIES = [
@@ -59,12 +59,20 @@ export default function ActivitiesPage() {
     try {
       if (isJoining) {
         await updateDoc(activityRef, {
-          participants: [...(activity.participants || []), participant]
+          participants: arrayUnion(participant)
         });
       } else {
-        await updateDoc(activityRef, {
-          participants: (activity.participants || []).filter(p => p.uid !== user.uid)
-        });
+        // To remove properly, we need to find the exact object or use a different strategy.
+        // Since participants contains displayName/photoURL which might be stale, 
+        // it's safer to filter and set if we can't guarantee exact match.
+        // However, arrayRemove only works with exact matches.
+        // For now, let's use the current activity state to find the participant object to remove.
+        const pToRemove = activity.participants.find(p => p.uid === user.uid);
+        if (pToRemove) {
+          await updateDoc(activityRef, {
+            participants: arrayRemove(pToRemove)
+          });
+        }
       }
     } catch (error) {
       console.error("Error joining activity:", error);
