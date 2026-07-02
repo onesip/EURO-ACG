@@ -1,0 +1,6 @@
+{
+  "name": "EuroACG",
+  "description": "European ACG community app for meetups, conventions, markets, and finding friends.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,65 @@
+{
+  "project_id": "gen-lang-client-0601780209",
+  "rules_file": "firestore.rules",
+  "collections": [
+    {
+      "name": "users",
+      "description": "User profiles",
+      "document_id": "uid",
+      "fields": [
+        { "name": "uid", "type": "string" },
+        { "name": "displayName", "type": "string" },
+        { "name": "photoURL", "type": "string" },
+        { "name": "bio", "type": "string" },
+        { "name": "role", "type": "string" },
+        { "name": "favorites", "type": "map" },
+        { "name": "socials", "type": "map" },
+        { "name": "createdAt", "type": "timestamp" },
+        { "name": "updatedAt", "type": "timestamp" }
+      ],
+      "security_rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null && request.auth.uid == uid",
+        "update": "request.auth != null && request.auth.uid == uid",
+        "delete": "request.auth != null && request.auth.uid == uid"
+      }
+    },
+    {
+      "name": "activities",
+      "description": "Meetups and conventions",
+      "fields": [
+        { "name": "title", "type": "string" },
+        { "name": "type", "type": "string" },
+        { "name": "date", "type": "string" },
+        { "name": "location", "type": "string" },
+        { "name": "description", "type": "string" },
+        { "name": "link", "type": "string" },
+        { "name": "creatorId", "type": "string" },
+        { "name": "participants", "type": "array" },
+        { "name": "createdAt", "type": "timestamp" }
+      ],
+      "security_rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null && request.resource.data.creatorId == request.auth.uid",
+        "update": "request.auth != null",
+        "delete": "request.auth != null && resource.data.creatorId == request.auth.uid"
+      }
+    },
+    {
+      "name": "posts",
+      "description": "Community posts",
+      "fields": [
+        { "name": "type", "type": "string" },
+        { "name": "content", "type": "string" },
+        { "name": "authorId", "type": "string" },
+        { "name": "createdAt", "type": "timestamp" }
+      ],
+      "security_rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null && request.resource.data.authorId == request.auth.uid",
+        "update": "request.auth != null && resource.data.authorId == request.auth.uid",
+        "delete": "request.auth != null && resource.data.authorId == request.auth.uid"
+      }
+    }
+  ]
+}
