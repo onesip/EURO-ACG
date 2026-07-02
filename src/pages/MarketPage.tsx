@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, addDoc, serverTimestamp, where, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
+import { collection, query, addDoc, serverTimestamp, where, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -11,7 +11,6 @@ import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { isQuotaExceeded } from '../lib/quota';
 import UserAvatar from '../components/UserAvatar';
-import CommentCount from '../components/CommentCount';
 import { Post } from '../types';
 import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -39,7 +38,8 @@ export default function MarketPage() {
     
     try {
       await updateDoc(postRef, { 
-        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
+        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+        likeCount: increment(hasLiked ? -1 : 1)
       });
     } catch (err) {
       console.error("Failed to like post", err);
@@ -167,7 +167,7 @@ export default function MarketPage() {
                   )}
                 >
                   <Heart className={cn("w-4 h-4 transition-transform active:scale-125 duration-200", user && post.likes?.includes(user.uid) ? "fill-rose-500/80 stroke-rose-400" : "")} /> 
-                  <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likes?.length || 0})</span>
+                  <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likeCount || 0})</span>
                 </button>
                 <div className="flex items-center gap-2">
                   <UserAvatar 
@@ -181,7 +181,7 @@ export default function MarketPage() {
                     onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
                     className="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition-colors"
                   >
-                    {t('mkt.contact')} <CommentCount parentCollection="posts" parentId={post.id} />
+                    {t('mkt.contact')} ({post.commentCount || 0})
                   </button>
                 </div>
               </div>

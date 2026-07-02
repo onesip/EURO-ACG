@@ -425,6 +425,7 @@ function CreateActivityModal({ editActivity, onClose }: { editActivity?: Activit
           ...formData,
           creatorId: user.uid,
           participants: [],
+          commentCount: 0,
           createdAt: serverTimestamp()
         });
       }

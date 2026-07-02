@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -10,7 +10,6 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
-import CommentCount from '../components/CommentCount';
 import { Post, PostType } from '../types';
 import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -60,7 +59,8 @@ export default function CommunityPage() {
     
     try {
       await updateDoc(postRef, { 
-        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
+        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
+        likeCount: increment(hasLiked ? -1 : 1)
       });
     } catch (err) {
       console.error("Failed to like post", err);
@@ -297,10 +297,10 @@ export default function CommunityPage() {
                     )}
                   >
                     <Heart className={cn("w-4 h-4 transition-transform active:scale-125 duration-200", user && post.likes?.includes(user.uid) ? "fill-rose-500/80 stroke-rose-400" : "")} /> 
-                    <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likes?.length || 0})</span>
+                    <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likeCount || 0})</span>
                   </button>
                   <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
-                    <MessageCircle className="w-4 h-4" /> {t('com.comment')} <CommentCount parentCollection="posts" parentId={post.id} />
+                    <MessageCircle className="w-4 h-4" /> {t('com.comment')} ({post.commentCount || 0})
                   </button>
                 </div>
 

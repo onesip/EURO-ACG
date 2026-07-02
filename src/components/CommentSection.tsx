@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, getDocs, increment, updateDoc, doc } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
@@ -60,6 +60,9 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
         authorName: profile?.displayName || 'User',
         authorPhoto: profile?.photoURL || '',
         createdAt: serverTimestamp()
+      });
+      await updateDoc(doc(db, parentCollection, parentId), {
+        commentCount: increment(1)
       });
       setContent('');
     } catch (error) {
