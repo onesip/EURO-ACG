@@ -1,19 +1,49 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { clearQuota } from '../lib/quota';
+import { collection, query, limit, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export default function QuotaBanner() {
   const { isQuotaExceeded, setQuotaExceeded } = useAuth();
   const { lang } = useLanguage();
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   if (!isQuotaExceeded) return null;
 
-  const handleRetry = () => {
-    clearQuota();
-    setQuotaExceeded(false);
-    window.location.reload();
+  const handleRetry = async () => {
+    setIsRetrying(true);
+    setRetryError(null);
+    
+    try {
+      // Attempt a small probe query
+      const q = query(collection(db, 'posts'), limit(1));
+      await getDocs(q);
+      
+      // If we reach here, it worked!
+      clearQuota();
+      setQuotaExceeded(false);
+      
+      // Clear cache flags
+      localStorage.removeItem('cached_community_posts');
+      localStorage.removeItem('cached_activities');
+      localStorage.removeItem('cached_market_posts');
+      localStorage.removeItem('cached_services');
+      
+      // Full reload to ensure fresh data
+      window.location.href = window.location.origin + window.location.pathname;
+    } catch (err: any) {
+      console.error("Retry probe failed:", err.code);
+      if (err?.code === 'resource-exhausted') {
+        setRetryError(lang === 'zh' ? '额度尚未恢复，请稍后再试（通常在太平洋时间凌晨重置）。' : 'Quota not reset yet. Usually resets at midnight PT.');
+      } else {
+        setRetryError(lang === 'zh' ? '连接尝试失败，请检查网络或稍后刷新。' : 'Connection failed. Please check your network or refresh later.');
+      }
+      setIsRetrying(false);
+    }
   };
 
   return (
@@ -28,16 +58,33 @@ export default function QuotaBanner() {
           </h3>
           <p className="text-sm text-slate-400 mt-1">
             {lang === 'zh' 
-              ? '由于今天访问量过大，Firebase 免费额度已耗尽。系统已进入 5 分钟自动保护模式，请稍后再试，或点击下方按钮重试。' 
-              : 'Firebase free quota has been exhausted due to high traffic today. 5-minute protection mode enabled. Please try again later or click the button below.'}
+              ? '由于今日访问量过大，Firebase 免费额度已耗尽。系统已进入 5 分钟自动保护模式以减少请求。如果点击重试后依然出现此提示，说明额度尚未重置（通常在太平洋时间凌晨重置）。' 
+              : 'Firebase free quota has been exhausted due to high traffic today. 5-minute protection mode enabled. If this persists after retry, the quota has not reset yet (usually resets at midnight PT).'}
           </p>
-          <button
-            onClick={handleRetry}
-            className="mt-4 flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-rose-900/20"
-          >
-            <RefreshCw className="w-4 h-4" />
-            {lang === 'zh' ? '立即重试 / 刷新页面' : 'Retry / Reload Page'}
-          </button>
+          <div className="flex flex-wrap gap-3 mt-4">
+            <button
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition-colors shadow-lg shadow-rose-900/20"
+            >
+              {isRetrying ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
+              {isRetrying 
+                ? (lang === 'zh' ? '正在尝试连接...' : 'Attempting to connect...') 
+                : (lang === 'zh' ? '立即强制重试' : 'Force Retry Now')}
+            </button>
+            <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-xs text-slate-500 flex items-center">
+              {lang === 'zh' ? '状态：受限中' : 'Status: Restricted'}
+            </div>
+          </div>
+          {retryError && (
+            <p className="mt-3 text-xs text-rose-400 font-medium animate-fadeIn">
+              ⚠️ {retryError}
+            </p>
+          )}
         </div>
       </div>
     </div>

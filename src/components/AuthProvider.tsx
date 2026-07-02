@@ -106,16 +106,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Probe query to clear quota flag if it was false-positively set or has reset
     const probeQuota = async () => {
       try {
+        console.log("Probing database quota...");
         const q = query(collection(db, 'posts'), limit(1));
         await getDocs(q);
-        // If we reach here, Firestore is working fine
+        console.log("Database probe successful.");
         setQuotaExceeded(false);
       } catch (err: any) {
+        console.error("Database probe error:", err.code, err.message);
         if (err?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else if (err?.code === 'permission-denied') {
-          // Permission denied is NOT a quota issue, but it means we can connect
-          // So if we had a quota flag, we should probably clear it as it's a different error
           setQuotaExceeded(false);
         }
       }

@@ -7,6 +7,7 @@ import { useLanguage } from './LanguageProvider';
 import { loginWithGoogle, registerWithEmail, loginWithEmail, logout } from '../lib/firebase';
 import { cn } from '../lib/utils';
 import { useTheme, ACG_THEMES } from './ThemeProvider';
+import QuotaBanner from './QuotaBanner';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, profile, isQuotaExceeded } = useAuth();
@@ -194,6 +195,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className="max-w-3xl mx-auto px-4 py-6 pt-20 pb-28 md:px-8 md:py-8 md:pt-20 md:pb-8">
+        <QuotaBanner />
         {/* Responsive Header Banner */}
         <div className="fixed top-0 inset-x-0 md:left-64 h-14 bg-[#141416]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 md:px-8 z-40">
            <div className="flex items-center gap-2">

@@ -12,11 +12,8 @@ import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
 import { ServiceAd, ServiceType } from '../types';
-import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin } from 'lucide-react';
+import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { isQuotaExceeded } from '../lib/quota';
-import QuotaBanner from '../components/QuotaBanner';
-
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
   { id: 'DE', name: '德国', flag: '🇩🇪', en: 'Germany' },
@@ -45,7 +42,7 @@ export default function ServicesPage() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [editingAd, setEditingAd] = useState<ServiceAd | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const { user, profile, setQuotaExceeded } = useAuth();
+  const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
@@ -148,9 +145,6 @@ export default function ServicesPage() {
         </button>
       </div>
 
-      <QuotaBanner />
-
-      {/* Country Filtering for Services */}
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
           {lang === 'zh' ? '🌍 圈子过滤 / 切换服务地区' : '🌍 Circle Filters / Service Regions'}
@@ -379,8 +373,27 @@ export default function ServicesPage() {
           );
         })
         ) : (
-          <div className="text-center py-12 text-slate-400 bg-[#141416] rounded-2xl border border-white/5">
-            {lang === 'zh' ? `该地区暂无此分类服务，快来上架第一个服务吧！` : `No services registered in this region category yet.`}
+          <div className="text-center py-20 text-slate-400 bg-[#141416] rounded-2xl border border-white/5 flex flex-col items-center">
+            {isQuotaExceeded ? (
+              <>
+                <AlertCircle className="w-12 h-12 mb-4 text-rose-500/50" />
+                <p className="text-sm font-medium opacity-80 text-rose-400">
+                  {lang === 'zh' ? '数据库暂时无法连接 (额度已耗尽)' : 'Database currently offline (Quota exceeded)'}
+                </p>
+                <p className="text-xs mt-2 max-w-xs mx-auto opacity-50">
+                  {lang === 'zh' ? '由于今日流量过大，免费额度已用完。请等待自动恢复，或尝试点击上方重试按钮。' : 'Free quota exhausted due to high traffic. Please wait for recovery or try the retry button above.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                  <Sparkles className="w-8 h-8 opacity-20" />
+                </div>
+                <p className="max-w-xs mx-auto">
+                  {lang === 'zh' ? `该地区暂无此分类服务，快来上架第一个服务吧！` : `No services registered in this region category yet.`}
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

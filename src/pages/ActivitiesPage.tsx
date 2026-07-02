@@ -7,11 +7,9 @@ import LocationInput from '../components/LocationInput';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
-import { isQuotaExceeded } from '../lib/quota';
-import QuotaBanner from '../components/QuotaBanner';
 import UserAvatar from '../components/UserAvatar';
 import { Activity } from '../types';
-import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin, AlertCircle } from 'lucide-react';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
 import { collection, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
@@ -37,7 +35,7 @@ export default function ActivitiesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const { user, profile, setQuotaExceeded } = useAuth();
+  const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
@@ -153,9 +151,6 @@ export default function ActivitiesPage() {
         </button>
       </div>
 
-      <QuotaBanner />
-
-      {/* Country Filters / 国家活动圈子 */}
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
           {lang === 'zh' ? '🌍 圈子过滤 / 切换国家频道' : '🌍 Region Circles / Country Channels'}
@@ -357,8 +352,27 @@ export default function ActivitiesPage() {
           );
         })
         ) : (
-          <div className="text-center py-12 text-slate-400 bg-[#141416] rounded-2xl border border-white/5">
-            {lang === 'zh' ? `该频道目前没有活动，快来发布第一个吧！` : `No activities in this channel yet. Be the first to create one!`}
+          <div className="text-center py-20 text-slate-400 bg-[#141416] rounded-2xl border border-white/5 flex flex-col items-center">
+            {isQuotaExceeded ? (
+              <>
+                <AlertCircle className="w-12 h-12 mb-4 text-rose-500/50" />
+                <p className="text-sm font-medium opacity-80 text-rose-400">
+                  {lang === 'zh' ? '数据库暂时无法连接 (额度已耗尽)' : 'Database currently offline (Quota exceeded)'}
+                </p>
+                <p className="text-xs mt-2 max-w-xs mx-auto opacity-50 text-center">
+                  {lang === 'zh' ? '由于今日流量过大，免费额度已用完。请等待自动恢复，或尝试点击上方重试按钮。' : 'Free quota exhausted due to high traffic. Please wait for recovery or try the retry button above.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                  <Sparkles className="w-8 h-8 opacity-20" />
+                </div>
+                <p className="max-w-xs mx-auto">
+                  {lang === 'zh' ? `该频道目前没有活动，快来发布第一个吧！` : `No activities in this channel yet. Be the first to create one!`}
+                </p>
+              </>
+            )}
           </div>
         )}
       </div>

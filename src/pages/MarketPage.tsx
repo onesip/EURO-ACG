@@ -10,11 +10,9 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
-import { isQuotaExceeded } from '../lib/quota';
-import QuotaBanner from '../components/QuotaBanner';
 import UserAvatar from '../components/UserAvatar';
 import { Post } from '../types';
-import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart, Pin } from 'lucide-react';
+import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart, Pin, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function MarketPage() {
@@ -24,7 +22,7 @@ export default function MarketPage() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Post | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const { user, profile, setQuotaExceeded } = useAuth();
+  const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
@@ -137,8 +135,6 @@ export default function MarketPage() {
           <span className="hidden sm:inline">{t('mkt.new')}</span>
         </button>
       </div>
-
-      <QuotaBanner />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {isLoading ? (
@@ -285,9 +281,23 @@ export default function MarketPage() {
           </div>
         ))
         ) : (
-          <div className="col-span-full text-center py-12 text-slate-400 flex flex-col items-center">
-            <PackageSearch className="w-12 h-12 text-slate-300 mb-3" />
-            <p>{t('mkt.empty')}</p>
+          <div className="col-span-full text-center py-20 text-slate-400 bg-[#141416] rounded-2xl border border-white/5 flex flex-col items-center">
+            {isQuotaExceeded ? (
+              <>
+                <AlertCircle className="w-12 h-12 mb-4 text-rose-500/50" />
+                <p className="text-sm font-medium opacity-80 text-rose-400">
+                  {lang === 'zh' ? '数据库暂时无法连接 (额度已耗尽)' : 'Database currently offline (Quota exceeded)'}
+                </p>
+                <p className="text-xs mt-2 max-w-xs mx-auto opacity-50">
+                  {lang === 'zh' ? '由于今日流量过大，免费额度已用完。请等待自动恢复，或尝试点击上方重试按钮。' : 'Free quota exhausted due to high traffic. Please wait for recovery or try the retry button above.'}
+                </p>
+              </>
+            ) : (
+              <>
+                <PackageSearch className="w-12 h-12 text-slate-300 mb-3 opacity-20" />
+                <p>{t('mkt.empty')}</p>
+              </>
+            )}
           </div>
         )}
       </div>
