@@ -2,4 +2,15 @@
 
 :root {
   color-scheme: dark;
+  --theme-400: 129, 140, 248;
+  --theme-500: 99, 102, 241;
+  --theme-600: 79, 70, 229;
+  --theme-700: 67, 56, 202;
+}
+
+@theme {
+  --color-indigo-400: rgb(var(--theme-400));
+  --color-indigo-500: rgb(var(--theme-500));
+  --color-indigo-600: rgb(var(--theme-600));
+  --color-indigo-700: rgb(var(--theme-700));
 }

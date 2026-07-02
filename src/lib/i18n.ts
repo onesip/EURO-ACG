@@ -8,6 +8,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.market': 'Flea Market',
     'nav.profile': 'Profile',
     'nav.services': 'Services',
+    'nav.guide': 'User Guide',
     'nav.login': 'Sign in with Google',
     'nav.logout': 'Sign Out',
     
@@ -57,6 +58,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'prof.socials': 'Social Connections',
     'prof.save': 'Save Profile',
     'prof.saving': 'Saving...',
+    'prof.residentCountries': 'Resident Countries (Multiselect)',
+    'prof.visitCountries': 'Will Go / Visiting Countries (Multiselect)',
+    'prof.skinChange': 'Switch ACG skin theme',
     
     // Comments
     'comment.placeholder': 'Add a comment...',
@@ -115,6 +119,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.market': '回血集市',
     'nav.profile': '本命档案',
     'nav.services': '神仙产粮',
+    'nav.guide': '新手攻略',
     'nav.login': '签到登录',
     'nav.logout': '润了润了',
     
@@ -164,6 +169,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'prof.socials': '社交扩列',
     'prof.save': '保存情报',
     'prof.saving': '正在记录...',
+    'prof.residentCountries': '常驻国家 (多选)',
+    'prof.visitCountries': '会去/规划国家 (多选)',
+    'prof.skinChange': '更换二次元皮肤/界面色彩',
     
     // Comments
     'comment.placeholder': '发条弹幕吐槽一下...',

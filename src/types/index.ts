@@ -21,6 +21,8 @@ export interface UserProfile {
     wechat: string;
     qq: string;
   };
+  residentCountries?: string[];
+  visitCountries?: string[];
 }
 
 export interface Activity {

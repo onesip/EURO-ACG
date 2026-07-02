@@ -8,7 +8,21 @@ import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { Post, PostType } from '../types';
-import { MessageCircle, Heart, Share2, Plus, X, AlertCircle, Lightbulb, Users, Flame } from 'lucide-react';
+import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+const EUROPEAN_COUNTRIES = [
+  { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
+  { id: 'DE', name: '德国', flag: '🇩🇪', en: 'Germany' },
+  { id: 'BE', name: '比利时', flag: '🇧🇪', en: 'Belgium' },
+  { id: 'FR', name: '法国', flag: '🇫🇷', en: 'France' },
+  { id: 'UK', name: '英国', flag: '🇬🇧', en: 'UK' },
+  { id: 'IT', name: '意大利', flag: '🇮🇹', en: 'Italy' },
+  { id: 'ES', name: '西班牙', flag: '🇪🇸', en: 'Spain' },
+  { id: 'CH', name: '瑞士', flag: '🇨🇭', en: 'Switzerland' },
+  { id: 'AT', name: '奥地利', flag: '🇦🇹', en: 'Austria' },
+  { id: 'OTHER', name: '其他地区', flag: '🇪🇺', en: 'Other' },
+];
 
 const POST_TABS: { id: PostType; icon: any }[] = [
   { id: 'social', icon: Users },
@@ -21,9 +35,10 @@ export default function CommunityPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [activeTab, setActiveTab] = useState<PostType>('social');
   const [activeSubCategory, setActiveSubCategory] = useState<string>('all');
+  const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const { user, profile } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
@@ -40,7 +55,10 @@ export default function CommunityPage() {
   const filteredPosts = posts.filter(p => {
     if (p.type !== activeTab) return false;
     if (activeTab === 'tips' && activeSubCategory !== 'all') {
-      return p.subCategory === activeSubCategory;
+      if (p.subCategory !== activeSubCategory) return false;
+    }
+    if (selectedCountry !== 'ALL') {
+      return p.country === selectedCountry;
     }
     return true;
   });
@@ -54,7 +72,7 @@ export default function CommunityPage() {
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-fadeIn pb-12">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">{t('com.title')}</h1>
@@ -69,7 +87,42 @@ export default function CommunityPage() {
         </button>
       </div>
 
-      <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide">
+      {/* Country Channels / 国家频道圈子 */}
+      <div className="space-y-2">
+        <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+          {lang === 'zh' ? '🌍 圈子过滤 / 切换国家频道' : '🌍 Region Circles / Country Channels'}
+        </label>
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <button
+            onClick={() => setSelectedCountry('ALL')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              selectedCountry === 'ALL'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>{lang === 'zh' ? '全部频道 (All)' : 'All Channels'}</span>
+          </button>
+          {EUROPEAN_COUNTRIES.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedCountry(c.id)}
+              className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                selectedCountry === c.id
+                  ? 'bg-indigo-600 text-white shadow-lg'
+                  : 'bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <span>{c.flag}</span>
+              <span>{lang === 'zh' ? c.name : c.en}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Forum Categorized Tabs */}
+      <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-none">
         {POST_TABS.map((tab) => (
           <button
             key={tab.id}
@@ -77,10 +130,10 @@ export default function CommunityPage() {
               setActiveTab(tab.id);
               if (tab.id === 'tips') setActiveSubCategory('all');
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full font-medium whitespace-nowrap transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
               activeTab === tab.id 
-                ? 'bg-indigo-500/10 text-indigo-400' 
-                : 'bg-transparent text-slate-400 border border-white/5 hover:bg-white/5 hover:text-white'
+                ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' 
+                : 'bg-transparent text-slate-400 border-white/5 hover:bg-white/5 hover:text-white'
             }`}
           >
             <tab.icon className="w-4 h-4" />
@@ -90,7 +143,7 @@ export default function CommunityPage() {
       </div>
 
       {activeTab === 'tips' && (
-        <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-hide mt-[-10px]">
+        <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-none mt-[-10px]">
           {TIPS_SUB_CATEGORIES.map((cat) => (
             <button
               key={cat.id}
@@ -108,39 +161,57 @@ export default function CommunityPage() {
       )}
 
       <div className="grid gap-4">
-        {filteredPosts.map((post) => (
-          <div key={post.id} className="bg-[#141416] p-6 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all group">
-            <div className="flex items-start gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-bold overflow-hidden shrink-0">
-                {post.authorPhoto ? (
-                  <img src={post.authorPhoto} alt="Avatar" className="w-full h-full object-cover" />
+        {filteredPosts.map((post) => {
+          const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === post.country);
+          return (
+            <div key={post.id} className="bg-[#141416] p-6 rounded-2xl border border-white/5 hover:border-indigo-500/30 transition-all group">
+              <div className="flex justify-between items-start mb-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 font-bold overflow-hidden shrink-0">
+                    {post.authorPhoto ? (
+                      <img src={post.authorPhoto} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      post.authorName ? post.authorName.charAt(0) : post.authorId.substring(0, 2).toUpperCase()
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{post.authorName || `User ${post.authorId.substring(0, 4)}`}</p>
+                    <p className="text-xs text-slate-400">{post.createdAt ? new Date(post.createdAt.toMillis()).toLocaleString() : 'Just now'}</p>
+                  </div>
+                </div>
+
+                {/* Country Badge */}
+                {countryInfo ? (
+                  <div className="px-2 py-1 bg-white/5 border border-white/5 text-slate-300 rounded-full text-xs flex items-center gap-1 shrink-0">
+                    <span>{countryInfo.flag}</span>
+                    <span>{lang === 'zh' ? countryInfo.name : countryInfo.en}</span>
+                  </div>
                 ) : (
-                  post.authorName ? post.authorName.charAt(0) : post.authorId.substring(0, 2).toUpperCase()
+                  <div className="px-2 py-1 bg-white/5 border border-white/5 text-slate-400 rounded-full text-xs flex items-center gap-1 shrink-0">
+                    <span>🇪🇺</span>
+                    <span>{lang === 'zh' ? '全欧洲' : 'Pan-EU'}</span>
+                  </div>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-white truncate">{post.authorName || `User ${post.authorId.substring(0, 4)}`}</p>
-                <p className="text-xs text-slate-400">{post.createdAt ? new Date(post.createdAt.toMillis()).toLocaleString() : 'Just now'}</p>
+              <div className="mb-4">
+                <PostContent content={post.content} />
               </div>
+              <div className="flex items-center gap-6 mt-4 pt-4 border-t border-white/5">
+                <button className="flex items-center gap-1.5 text-slate-400 hover:text-rose-400 transition-colors text-sm font-medium">
+                  <Heart className="w-4 h-4" /> {t('com.like')}
+                </button>
+                <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
+                  <MessageCircle className="w-4 h-4" /> {t('com.comment')}
+                </button>
+              </div>
+              
+              <CommentSection parentCollection="posts" parentId={post.id} />
             </div>
-            <div className="mb-4">
-              <PostContent content={post.content} />
-            </div>
-            <div className="flex items-center gap-6 mt-4 pt-4 border-t border-white/5">
-              <button className="flex items-center gap-1.5 text-slate-400 hover:text-rose-400 transition-colors text-sm font-medium">
-                <Heart className="w-4 h-4" /> {t('com.like')}
-              </button>
-              <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
-                <MessageCircle className="w-4 h-4" /> {t('com.comment')}
-              </button>
-            </div>
-            
-            <CommentSection parentCollection="posts" parentId={post.id} />
-          </div>
-        ))}
+          );
+        })}
         {filteredPosts.length === 0 && (
-          <div className="text-center py-12 text-slate-400">
-            {t('com.empty')}
+          <div className="text-center py-12 text-slate-400 bg-[#141416] rounded-2xl border border-white/5">
+            {lang === 'zh' ? `该国家频道或分类目前没有发言，快来发第一个贴吧！` : `No posts in this channel yet. Share your thoughts!`}
           </div>
         )}
       </div>
@@ -157,10 +228,11 @@ export default function CommunityPage() {
 
 function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose: () => void }) {
   const { user, profile } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [content, setContent] = useState('');
   const [type, setType] = useState<PostType>(defaultType);
   const [subCategory, setSubCategory] = useState<string>('cosplay');
+  const [country, setCountry] = useState<string>('ALL');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -173,6 +245,7 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
         type,
         ...(type === 'tips' ? { subCategory } : {}),
         content,
+        country,
         authorId: user.uid,
         authorName: profile?.displayName || 'User',
         authorPhoto: profile?.photoURL || '',
@@ -189,29 +262,53 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
 
   return (
     <div className="fixed inset-0 bg-[#0A0A0B]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141416] rounded-2xl shadow-xl shadow-indigo-500/5 border border-white/10 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center p-4 border-b border-white/5">
-          <h2 className="text-lg font-bold text-white">{t('com.modal.title')}</h2>
+      <div className="bg-[#141416] rounded-3xl shadow-2xl border border-white/10 w-full max-w-md overflow-hidden animate-fadeIn">
+        <div className="flex justify-between items-center p-5 border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-lg font-bold text-white">{t('com.modal.title')}</h2>
+          </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-white/5 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          <div>
-            <select 
-              value={type}
-              onChange={e => setType(e.target.value as PostType)}
-              className="w-full px-3 py-2 bg-slate-800 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-sm font-medium"
-            >
-              <option value="social" className="bg-slate-900 text-white">{t('com.tab.social')}</option>
-              <option value="tips" className="bg-slate-900 text-white">{t('com.tab.tips')}</option>
-              <option value="drama" className="bg-slate-900 text-white">{t('com.tab.drama')}</option>
-              <option value="sos" className="bg-slate-900 text-white">{t('com.tab.sos')}</option>
-            </select>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '分类类型' : 'Post Type'}</label>
+              <select 
+                value={type}
+                onChange={e => setType(e.target.value as PostType)}
+                className="w-full px-3 py-2 bg-slate-800 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-sm font-medium"
+              >
+                <option value="social" className="bg-slate-900 text-white">{t('com.tab.social')}</option>
+                <option value="tips" className="bg-slate-900 text-white">{t('com.tab.tips')}</option>
+                <option value="drama" className="bg-slate-900 text-white">{t('com.tab.drama')}</option>
+                <option value="sos" className="bg-slate-900 text-white">{t('com.tab.sos')}</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '所属国家圈子' : 'Circle Country'}</label>
+              <select 
+                value={country}
+                onChange={e => setCountry(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-800 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-sm font-medium"
+              >
+                <option value="ALL" className="bg-slate-900 text-white">🇪🇺 {lang === 'zh' ? '全欧洲频道' : 'Pan-European'}</option>
+                {EUROPEAN_COUNTRIES.map(c => (
+                  <option key={c.id} value={c.id} className="bg-slate-900 text-white">
+                    {c.flag} {lang === 'zh' ? c.name : c.en}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           
           {type === 'tips' && (
             <div>
+              <label className="block text-sm font-medium text-slate-400 mb-1">安利分类</label>
               <select 
                 value={subCategory}
                 onChange={e => setSubCategory(e.target.value)}
@@ -231,7 +328,8 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
               rows={5}
               value={content}
               onChange={e => setContent(e.target.value)}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2 text-sm"
+              placeholder={lang === 'zh' ? '在此处畅所欲言，支持贴图和添加链接哦' : 'Write your post here...'}
             />
             <div className="flex justify-start">
               <ImageUpload onUpload={(url) => setContent(prev => prev + `\n![图片](${url})\n`)} />
@@ -241,7 +339,7 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
             <button
               type="submit"
               disabled={isSubmitting || !content.trim()}
-              className="w-full py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50"
+              className="w-full py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 text-sm"
             >
               {isSubmitting ? t('com.modal.submitting') : t('com.modal.submit')}
             </button>

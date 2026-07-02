@@ -6,21 +6,21 @@ import { useLanguage } from '../components/LanguageProvider';
 import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
+import EmbeddedMedia from '../components/EmbeddedMedia';
 import { Post } from '../types';
-import { Plus, X, Tag, PackageSearch } from 'lucide-react';
+import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 export default function MarketPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const { user, profile } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
 
   useEffect(() => {
     const q = query(
       collection(db, 'posts'), 
       where('type', '==', 'market')
-      // Note: without a composite index on type + createdAt, we can't order by createdAt.
-      // So we fetch all market posts and sort locally.
     );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const postsData = snapshot.docs.map(doc => ({
@@ -30,9 +30,9 @@ export default function MarketPage() {
       
       // Sort locally descending
       postsData.sort((a, b) => {
-         const aTime = a.createdAt?.toMillis() || 0;
-         const bTime = b.createdAt?.toMillis() || 0;
-         return bTime - aTime;
+        const aTime = a.createdAt?.toMillis() || 0;
+        const bTime = b.createdAt?.toMillis() || 0;
+        return bTime - aTime;
       });
       setPosts(postsData);
     });
@@ -40,7 +40,7 @@ export default function MarketPage() {
   }, []);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-fadeIn pb-12">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-white">{t('mkt.title')}</h1>
@@ -65,9 +65,18 @@ export default function MarketPage() {
               </div>
               <p className="text-xs text-slate-400">{post.createdAt ? new Date(post.createdAt.toMillis()).toLocaleString() : 'Just now'}</p>
             </div>
-            <div className="flex-1 mb-4">
+            
+            {/* Embedded custom cover and videos */}
+            <EmbeddedMedia 
+              content={post.content || ''} 
+              coverImage={post.coverImage} 
+              videoLink={post.videoLink} 
+            />
+
+            <div className="flex-1 mb-4 mt-3">
               <PostContent content={post.content} />
             </div>
+
             <div className="flex items-center justify-between pt-4 border-t border-white/5">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 text-[10px] font-bold overflow-hidden shrink-0">
@@ -105,8 +114,10 @@ export default function MarketPage() {
 
 function ComposeMarketModal({ onClose }: { onClose: () => void }) {
   const { user, profile } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [content, setContent] = useState('');
+  const [coverImage, setCoverImage] = useState('');
+  const [videoLink, setVideoLink] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -118,6 +129,8 @@ function ComposeMarketModal({ onClose }: { onClose: () => void }) {
       await addDoc(collection(db, 'posts'), {
         type: 'market',
         content,
+        coverImage,
+        videoLink,
         authorId: user.uid,
         authorName: profile?.displayName || 'User',
         authorPhoto: profile?.photoURL || '',
@@ -134,21 +147,70 @@ function ComposeMarketModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-[#0A0A0B]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141416] rounded-2xl shadow-xl shadow-indigo-500/5 border border-white/10 w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="flex justify-between items-center p-4 border-b border-white/5">
-          <h2 className="text-lg font-bold text-white">{t('mkt.modal.title')}</h2>
+      <div className="bg-[#141416] rounded-3xl shadow-2xl border border-white/10 w-full max-w-md overflow-hidden animate-fadeIn">
+        <div className="flex justify-between items-center p-5 border-b border-white/5">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-lg font-bold text-white">{t('mkt.modal.title')}</h2>
+          </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-white/5 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          
+          {/* Custom Cover Image Option / 自定义首图 */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-slate-400">🖼️ {lang === 'zh' ? '自定义宝贝首图 / Cover Photo' : 'Custom Cover Image'}</label>
+            {coverImage ? (
+              <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-900">
+                <img src={coverImage} alt="Cover Preview" className="w-full h-full object-cover" />
+                <button 
+                  type="button"
+                  onClick={() => setCoverImage('')}
+                  className="absolute top-2 right-2 p-1 bg-black/60 rounded-full text-slate-300 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input 
+                  type="url" 
+                  placeholder={lang === 'zh' ? '输入任意图片 URL 网址，或点击右侧上传' : 'Insert Cover Image URL, or upload'}
+                  value={coverImage}
+                  onChange={e => setCoverImage(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-xs"
+                />
+                <ImageUpload 
+                  onUpload={(url) => setCoverImage(url)} 
+                  buttonText={lang === 'zh' ? '上传首图' : 'Upload Cover'}
+                  className="shrink-0"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Video / Video Link (YouTube, Bilibili, Xiaohongshu) */}
+          <div className="space-y-1">
+            <label className="block text-sm font-medium text-slate-400">🔗 {lang === 'zh' ? '关联视频/分享链接 (YouTube / Bilibili / 小红书)' : 'Embed Video/Social Link'}</label>
+            <input 
+              type="url" 
+              placeholder="https://..."
+              value={videoLink}
+              onChange={e => setVideoLink(e.target.value)}
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-xs"
+            />
+          </div>
+
           <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '宝贝描述' : 'Item Description'}</label>
             <textarea 
               required
-              rows={6}
+              rows={5}
               value={content}
               onChange={e => setContent(e.target.value)}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2"
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2 text-sm"
               placeholder={t('mkt.modal.desc')}
             />
             <div className="flex justify-start">
@@ -159,7 +221,7 @@ function ComposeMarketModal({ onClose }: { onClose: () => void }) {
             <button
               type="submit"
               disabled={isSubmitting || !content.trim()}
-              className="w-full py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50"
+              className="w-full py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 text-sm"
             >
               {isSubmitting ? t('mkt.modal.submitting') : t('mkt.modal.submit')}
             </button>

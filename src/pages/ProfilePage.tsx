@@ -3,47 +3,77 @@ import { useAuth } from '../components/AuthProvider';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { UserRole } from '../types';
-import { Save, LogIn } from 'lucide-react';
+import { Save, LogIn, Sparkles, MapPin, Palette } from 'lucide-react';
 import { loginWithGoogle } from '../lib/firebase';
 import ImageUpload from '../components/ImageUpload';
 import { useLanguage } from '../components/LanguageProvider';
+import { useTheme, ACG_THEMES } from '../components/ThemeProvider';
+import { cn } from '../lib/utils';
+
+const EUROPEAN_COUNTRIES = [
+  { id: 'NL', name: '荷兰 (Netherlands)' },
+  { id: 'DE', name: '德国 (Germany)' },
+  { id: 'BE', name: '比利时 (Belgium)' },
+  { id: 'FR', name: '法国 (France)' },
+  { id: 'UK', name: '英国 (United Kingdom)' },
+  { id: 'IT', name: '意大利 (Italy)' },
+  { id: 'ES', name: '西班牙 (Spain)' },
+  { id: 'CH', name: '瑞士 (Switzerland)' },
+  { id: 'AT', name: '奥地利 (Austria)' },
+  { id: 'OTHER', name: '其他地区 (Other)' },
+];
 
 export default function ProfilePage() {
   const { user, profile, refreshProfile } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const { activeTheme, setThemeById } = useTheme();
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     displayName: '',
+    photoURL: '',
     bio: '',
     role: 'other' as UserRole,
     favorites: { anime: '', characters: '', cp: '' },
     socials: { x: '', instagram: '', xiaohongshu: '', wechat: '', qq: '' },
+    residentCountries: [] as string[],
+    visitCountries: [] as string[],
   });
 
   useEffect(() => {
     if (profile) {
       setFormData({
         displayName: profile.displayName || '',
+        photoURL: profile.photoURL || '',
         bio: profile.bio || '',
         role: profile.role || 'other',
-        favorites: { ...profile.favorites },
-        socials: { ...profile.socials },
+        favorites: {
+          anime: profile.favorites?.anime || '',
+          characters: profile.favorites?.characters || '',
+          cp: profile.favorites?.cp || '',
+        },
+        socials: {
+          x: profile.socials?.x || '',
+          instagram: profile.socials?.instagram || '',
+          xiaohongshu: profile.socials?.xiaohongshu || '',
+          wechat: profile.socials?.wechat || '',
+          qq: profile.socials?.qq || '',
+        },
+        residentCountries: profile.residentCountries || [],
+        visitCountries: profile.visitCountries || [],
       });
     }
   }, [profile]);
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center animate-in fade-in">
+      <div className="flex flex-col items-center justify-center py-20 text-center animate-fadeIn">
         <h2 className="text-2xl font-bold text-white mb-2">Create Your Profile</h2>
-        <p className="text-slate-400 mb-6 max-w-md">Join the EuroACG community to connect with other fans, cosplayers, and photographers.</p>
-        <button 
-          onClick={loginWithGoogle}
-          className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium"
-        >
-          <LogIn className="w-5 h-5" />
-          Sign in with Google
-        </button>
+        <p className="text-slate-400 mb-6 max-w-md">Join the EUROACG community to connect with other fans, cosplayers, and photographers in Europe.</p>
+        <div className="p-6 bg-[#141416] border border-white/5 rounded-3xl mb-6 max-w-sm">
+          <p className="text-xs text-slate-400 leading-relaxed">
+            💡 <strong>登录提示:</strong> 点击下方按钮将呼出 Google / Apple 账户签到。若处于 Vercel 或自定义域名，请在 Firebase 的 Authorized Domains 里加白名单。
+          </p>
+        </div>
       </div>
     );
   }
@@ -55,26 +85,61 @@ export default function ProfilePage() {
       const docRef = doc(db, 'users', user.uid);
       await updateDoc(docRef, { ...formData, updatedAt: Date.now() });
       await refreshProfile();
-      alert('Profile updated!');
+      alert('本命档案更新成功！Profile updated successfully!');
     } catch (error) {
       console.error(error);
-      alert('Failed to update profile');
+      alert('保存失败 Failed to update profile');
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto animate-in fade-in duration-500 pb-10">
+    <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn pb-10">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">{t('prof.title')}</h1>
         <p className="text-slate-400 mt-1">{t('prof.subtitle')}</p>
       </div>
 
       <div className="bg-[#141416] p-6 rounded-3xl border border-white/5 space-y-6">
+        
+        {/* ACG Skins Customization */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+            <Palette className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-lg font-semibold text-white">{t('prof.skinChange')}</h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {ACG_THEMES.map((theme) => {
+              const isActive = activeTheme.id === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  onClick={() => setThemeById(theme.id)}
+                  type="button"
+                  className={cn(
+                    "flex flex-col items-center gap-2 p-4 rounded-2xl border text-xs cursor-pointer transition-all text-center",
+                    isActive 
+                      ? "bg-indigo-500/10 border-indigo-500 text-white font-bold scale-105 shadow-md" 
+                      : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                  )}
+                >
+                  <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center p-1" style={{ backgroundColor: `rgb(${theme.colors.theme500})` }}>
+                    <div className="w-3 h-3 rounded-full bg-white" />
+                  </div>
+                  <span>{theme.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
         {/* Basic Info */}
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-white border-b border-white/5 pb-2">{t('prof.basicInfo')}</h2>
+          <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+            <Sparkles className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-lg font-semibold text-white">{t('prof.basicInfo')}</h2>
+          </div>
           
           <div className="flex items-center gap-6 pb-4">
             <div className="relative group">
@@ -89,13 +154,13 @@ export default function ProfilePage() {
                 <ImageUpload 
                   onUpload={(url) => setFormData({...formData, photoURL: url})} 
                   className="scale-90"
-                  buttonText="更换"
+                  buttonText={lang === 'zh' ? '更换' : 'Change'}
                 />
               </div>
             </div>
             <div>
-              <h3 className="text-white font-medium">账号头像</h3>
-              <p className="text-xs text-slate-400 mt-1">支持 JPG, PNG 格式</p>
+              <h3 className="text-white font-medium">{lang === 'zh' ? '账号头像' : 'Profile Avatar'}</h3>
+              <p className="text-xs text-slate-400 mt-1">{lang === 'zh' ? '支持 JPG, PNG 格式' : 'Supports JPG, PNG formats'}</p>
             </div>
           </div>
 
@@ -133,6 +198,74 @@ export default function ProfilePage() {
               />
               <div className="flex justify-start">
                 <ImageUpload onUpload={(url) => setFormData(prev => ({...prev, bio: prev.bio + `\n![图片](${url})\n`}))} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Multi-Region Selection */}
+        <section className="space-y-4">
+          <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+            <MapPin className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-lg font-semibold text-white">{lang === 'zh' ? '🌍 欧洲活动区域 (常驻与去向)' : '🌍 European Active Regions'}</h2>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">{t('prof.residentCountries')}</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {EUROPEAN_COUNTRIES.map((country) => {
+                  const isChecked = formData.residentCountries?.includes(country.id);
+                  return (
+                    <button
+                      key={country.id}
+                      type="button"
+                      onClick={() => {
+                        const newCountries = isChecked 
+                          ? formData.residentCountries.filter(c => c !== country.id)
+                          : [...formData.residentCountries, country.id];
+                        setFormData({...formData, residentCountries: newCountries});
+                      }}
+                      className={cn(
+                        "flex items-center justify-center p-3 rounded-xl border text-xs cursor-pointer transition-all",
+                        isChecked 
+                          ? "bg-indigo-500/10 border-indigo-500 text-white font-semibold" 
+                          : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                      )}
+                    >
+                      <span>{country.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">{t('prof.visitCountries')}</label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {EUROPEAN_COUNTRIES.map((country) => {
+                  const isChecked = formData.visitCountries?.includes(country.id);
+                  return (
+                    <button
+                      key={country.id}
+                      type="button"
+                      onClick={() => {
+                        const newCountries = isChecked 
+                          ? formData.visitCountries.filter(c => c !== country.id)
+                          : [...formData.visitCountries, country.id];
+                        setFormData({...formData, visitCountries: newCountries});
+                      }}
+                      className={cn(
+                        "flex items-center justify-center p-3 rounded-xl border text-xs cursor-pointer transition-all",
+                        isChecked 
+                          ? "bg-indigo-500/10 border-indigo-500 text-white font-semibold" 
+                          : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                      )}
+                    >
+                      <span>{country.name}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
