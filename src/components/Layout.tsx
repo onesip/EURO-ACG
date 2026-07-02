@@ -109,7 +109,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-slate-200 font-sans pb-20 md:pb-0 md:pl-64">
       {/* Sidebar for Desktop */}
-      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#141416] border-r border-white/5 md:flex flex-col">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#141416] border-r border-white/5 md:flex flex-col z-50">
         <div className="p-6">
           <div className="flex items-center justify-between mb-1">
             <h1 className="text-2xl font-bold tracking-tight text-white">Euro<span className="text-indigo-400 font-light">ACG</span></h1>
@@ -192,14 +192,50 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content */}
-      <main className="max-w-3xl mx-auto px-4 py-6 pt-20 pb-28 md:px-8 md:py-8 md:pt-8 md:pb-8">
-        {/* Mobile Header with Language Toggle */}
-        <div className="md:hidden fixed top-0 inset-x-0 h-14 bg-[#141416]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 z-50">
-           <h1 className="text-lg font-bold tracking-tight text-white">EUROACG</h1>
+      <main className="max-w-3xl mx-auto px-4 py-6 pt-20 pb-28 md:px-8 md:py-8 md:pt-20 md:pb-8">
+        {/* Responsive Header Banner */}
+        <div className="fixed top-0 inset-x-0 md:left-64 h-14 bg-[#141416]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 md:px-8 z-40">
+           <div className="flex items-center gap-2">
+             <h1 className="text-lg font-bold tracking-tight text-white md:hidden">EUROACG</h1>
+             {user && (
+               <span className="hidden md:inline-flex items-center gap-1.5 text-xs text-slate-400 font-semibold uppercase tracking-wider animate-fadeIn">
+                 <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                 {lang === 'zh' ? `二次元电波连线中: ${profile?.displayName || '同好'}` : `Online: ${profile?.displayName || 'User'}`}
+               </span>
+             )}
+           </div>
            <div className="flex items-center gap-3">
              <ThemeRow />
              <span className="w-[1px] h-4 bg-white/10" />
              <LanguageToggle />
+             <span className="w-[1px] h-4 bg-white/10" />
+             
+             {/* Header Avatar Widget */}
+             <Link
+               to={user ? "/profile" : "#"}
+               onClick={(e) => {
+                 if (!user) {
+                   e.preventDefault();
+                   setIsLoginModalOpen(true);
+                 }
+               }}
+               className="relative group shrink-0"
+               title={user ? (lang === 'zh' ? '查看个人主页' : 'View Profile') : (lang === 'zh' ? '登录' : 'Login')}
+             >
+               <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-500 p-0.5 overflow-hidden transition-all duration-300 active:scale-95 hover:scale-105 shadow-[0_0_12px_rgba(99,102,241,0.2)]">
+                 <div className="w-full h-full rounded-full bg-[#141416] flex items-center justify-center font-bold text-white text-[11px] overflow-hidden">
+                   {profile?.photoURL ? (
+                     <img src={profile.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                   ) : profile?.displayName ? (
+                     profile.displayName.charAt(0).toUpperCase()
+                   ) : user?.email ? (
+                     user.email.charAt(0).toUpperCase()
+                   ) : (
+                     <UserIcon className="w-4 h-4 text-slate-400" />
+                   )}
+                 </div>
+               </div>
+             </Link>
            </div>
         </div>
         {children}
