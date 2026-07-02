@@ -475,6 +475,8 @@ function ComposeModal({ defaultType, editPost, onClose }: { defaultType: PostTyp
           authorName: profile?.displayName || 'User',
           authorPhoto: profile?.photoURL || '',
           likes: [],
+          likeCount: 0,
+          commentCount: 0,
           createdAt: serverTimestamp()
         });
       }

@@ -74,6 +74,8 @@ export interface Post {
   coverImage?: string;
   videoLink?: string;
   likes?: string[];
+  likeCount: number;
+  commentCount: number;
   isPinned?: boolean;
 }
 
@@ -89,5 +91,7 @@ export interface ServiceAd {
   coverImage?: string;
   videoLink?: string;
   supports?: string[];
+  likeCount: number;
+  commentCount: number;
   isPinned?: boolean;
 }
