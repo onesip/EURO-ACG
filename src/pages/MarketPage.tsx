@@ -84,7 +84,6 @@ export default function MarketPage() {
     setIsLoading(false);
 
     const fetchData = async () => {
-      if (isQuotaExceeded()) return;
       try {
         let q = query(
           collection(db, 'posts'), 
@@ -128,7 +127,7 @@ export default function MarketPage() {
       }
     };
     fetchData();
-  }, [user, selectedCountry]);
+  }, [user, selectedCountry, isQuotaExceeded]);
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">

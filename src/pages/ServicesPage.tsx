@@ -89,7 +89,6 @@ export default function ServicesPage() {
     setIsLoading(false);
 
     const fetchData = async () => {
-      if (isQuotaExceeded()) return;
       try {
         let q = query(
           collection(db, 'services'),
@@ -133,7 +132,7 @@ export default function ServicesPage() {
       }
     };
     fetchData();
-  }, [user, activeTab, selectedCountry]);
+  }, [user, activeTab, selectedCountry, isQuotaExceeded]);
 
   const filteredAds = ads.filter(ad => {
     if (ad.type !== activeTab) return false;

@@ -36,14 +36,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = async (uid: string) => {
     try {
-      if (isQuotaExceeded()) {
-        throw new Error('Quota exceeded');
-      }
       const docRef = doc(db, 'users', uid);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const profileData = docSnap.data() as UserProfile;
         setProfile(profileData);
+        setQuotaExceeded(false); // Success! Clear quota if it was set
         // Cache profile
         localStorage.setItem(`profile_${uid}`, JSON.stringify(profileData));
       } else {
@@ -101,7 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
-    // Initial cleanup of old legacy quota flag
+    // Initial cleanup of old legacy quota flags
     localStorage.removeItem('quotaExceeded');
     localStorage.removeItem('quotaExceededAt');
 
@@ -110,15 +108,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         const q = query(collection(db, 'posts'), limit(1));
         await getDocs(q);
+        // If we reach here, Firestore is working fine
         setQuotaExceeded(false);
       } catch (err: any) {
         if (err?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
-        } else {
-          // For other errors, don't set quota but also don't necessarily clear it if it was already set
-          // but if we are here and it's not resource-exhausted, we can at least say it's not a quota issue
-          // However, if it's a network error, we don't know. 
-          // But according to requirements: "只要任意一次 Firestore 读取成功，就立刻清除"
+        } else if (err?.code === 'permission-denied') {
+          // Permission denied is NOT a quota issue, but it means we can connect
+          // So if we had a quota flag, we should probably clear it as it's a different error
+          setQuotaExceeded(false);
         }
       }
     };

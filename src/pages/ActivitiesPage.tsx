@@ -53,7 +53,6 @@ export default function ActivitiesPage() {
     setIsLoading(false);
 
     const fetchData = async () => {
-      if (isQuotaExceeded()) return;
       try {
         let q = query(collection(db, 'activities'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
         
@@ -93,7 +92,7 @@ export default function ActivitiesPage() {
       }
     };
     fetchData();
-  }, [user, selectedCountry]);
+  }, [user, selectedCountry, isQuotaExceeded]);
 
   const handlePin = async (activityId: string, currentlyPinned: boolean = false) => {
     if (!isAdmin) return;

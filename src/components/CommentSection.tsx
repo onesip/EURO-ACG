@@ -49,7 +49,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
       }
     };
     fetchData();
-  }, [parentCollection, parentId]);
+  }, [parentCollection, parentId, isQuotaExceeded]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

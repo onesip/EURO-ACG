@@ -58,7 +58,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   const [newReview, setNewReview] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  const { user, profile: currentUserProfile, setQuotaExceeded } = useAuth();
+  const { user, profile: currentUserProfile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
 
   const handleClose = () => {
@@ -164,7 +164,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
       unsubReviews();
       unsubFriends();
     };
-  }, [profileUid, user]);
+  }, [profileUid, user, isQuotaExceeded]);
 
   const handleAddFriend = async () => {
     if (!user || !profileUid || !currentUserProfile) return;

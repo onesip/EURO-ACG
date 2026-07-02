@@ -105,7 +105,6 @@ export default function CommunityPage() {
     setIsLoading(false);
 
     const fetchData = async () => {
-      if (isQuotaExceeded()) return;
       try {
         let q = query(
           collection(db, 'posts'),
@@ -151,7 +150,7 @@ export default function CommunityPage() {
       }
     };
     fetchData();
-  }, [user, activeTab, selectedCountry]);
+  }, [user, activeTab, selectedCountry, isQuotaExceeded]);
 
   const filteredPosts = posts.filter(p => {
     if (p.type !== activeTab) return false;
