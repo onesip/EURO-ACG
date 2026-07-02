@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
@@ -8,7 +8,7 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { ServiceAd, ServiceType } from '../types';
-import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe } from 'lucide-react';
+import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const EUROPEAN_COUNTRIES = [
@@ -36,6 +36,8 @@ export default function ServicesPage() {
   const [activeTab, setActiveTab] = useState<ServiceType>('photography');
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [editingAd, setEditingAd] = useState<ServiceAd | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
 
@@ -170,6 +172,58 @@ export default function ServicesPage() {
                 <PostContent content={ad.content} />
               </div>
               
+              {/* Edit/Delete Actions */}
+              {user && ad.authorId === user.uid && (
+                <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-white/5 border-dashed">
+                  {confirmDeleteId === ad.id ? (
+                    <div className="flex items-center gap-1.5 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-xl">
+                      <span className="text-[10px] text-rose-400 font-bold">{lang === 'zh' ? '确定下架？' : 'Delete?'}</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await deleteDoc(doc(db, 'services', ad.id));
+                            setConfirmDeleteId(null);
+                          } catch (err) {
+                            console.error(err);
+                            alert('Delete failed');
+                          }
+                        }}
+                        className="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-1.5 py-0.5 rounded transition-colors"
+                      >
+                        {lang === 'zh' ? '是' : 'Yes'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(null)}
+                        className="text-[9px] text-slate-400 hover:text-slate-200 px-1"
+                      >
+                        {lang === 'zh' ? '否' : 'No'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingAd(ad);
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
+                      >
+                        <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(ad.id)}
+                        className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> {lang === 'zh' ? '下架' : 'Remove'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Reviews/Comments */}
               <div className="mt-4 pt-4 border-t border-white/5">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Reviews & Comments</h4>
@@ -185,10 +239,14 @@ export default function ServicesPage() {
         )}
       </div>
 
-      {isComposeOpen && (
+      {(isComposeOpen || editingAd) && (
         <ComposeModal 
           defaultType={activeTab} 
-          onClose={() => setIsComposeOpen(false)} 
+          editAd={editingAd || undefined}
+          onClose={() => {
+            setIsComposeOpen(false);
+            setEditingAd(null);
+          }} 
         />
       )}
 
@@ -204,37 +262,55 @@ export default function ServicesPage() {
   );
 }
 
-function ComposeModal({ defaultType, onClose }: { defaultType: ServiceType, onClose: () => void }) {
+function ComposeModal({ defaultType, editAd, onClose }: { defaultType: ServiceType, editAd?: ServiceAd, onClose: () => void }) {
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
-  const [content, setContent] = useState('');
-  const [type, setType] = useState<ServiceType>(defaultType);
-  const [coverImage, setCoverImage] = useState('');
-  const [videoLink, setVideoLink] = useState('');
-  const [country, setCountry] = useState('NL');
+  const [content, setContent] = useState(editAd ? editAd.content : '');
+  const [type, setType] = useState<ServiceType>(editAd ? editAd.type : defaultType);
+  const [coverImage, setCoverImage] = useState(editAd?.coverImage || '');
+  const [videoLink, setVideoLink] = useState(editAd?.videoLink || '');
+  const [country, setCountry] = useState(editAd?.country || 'NL');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [touched, setTouched] = useState(false);
+
+  const isEdit = !!editAd;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert('Must be logged in');
+    if (!content.trim()) {
+      setTouched(true);
+      return;
+    }
     setIsSubmitting(true);
     
     try {
-      await addDoc(collection(db, 'services'), {
-        type,
-        content,
-        coverImage,
-        videoLink,
-        country,
-        authorId: user.uid,
-        authorName: profile?.displayName || 'User',
-        authorPhoto: profile?.photoURL || '',
-        createdAt: serverTimestamp()
-      });
+      if (isEdit) {
+        await updateDoc(doc(db, 'services', editAd.id), {
+          type,
+          content,
+          coverImage,
+          videoLink,
+          country,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'services'), {
+          type,
+          content,
+          coverImage,
+          videoLink,
+          country,
+          authorId: user.uid,
+          authorName: profile?.displayName || 'User',
+          authorPhoto: profile?.photoURL || '',
+          createdAt: serverTimestamp()
+        });
+      }
       onClose();
     } catch (error) {
       console.error(error);
-      alert('Failed to post ad');
+      alert('Failed to save service ad');
     } finally {
       setIsSubmitting(false);
     }
@@ -246,7 +322,11 @@ function ComposeModal({ defaultType, onClose }: { defaultType: ServiceType, onCl
         <div className="flex justify-between items-center p-5 border-b border-white/5">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-lg font-bold text-white">{t('srv.modal.title')}</h2>
+            <h2 className="text-lg font-bold text-white">
+              {isEdit 
+                ? (lang === 'zh' ? '✏️ 编辑服务 / Edit Service' : '✏️ Edit Service Ad') 
+                : t('srv.modal.title')}
+            </h2>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-white/5 transition-colors">
             <X className="w-5 h-5" />
@@ -256,7 +336,9 @@ function ComposeModal({ defaultType, onClose }: { defaultType: ServiceType, onCl
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '服务分类' : 'Service Type'}</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {lang === 'zh' ? '服务分类' : 'Service Type'} <span className="text-rose-500 font-bold">*</span>
+              </label>
               <select 
                 value={type}
                 onChange={e => setType(e.target.value as ServiceType)}
@@ -270,7 +352,9 @@ function ComposeModal({ defaultType, onClose }: { defaultType: ServiceType, onCl
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '服务所在国家' : 'Service Country'}</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {lang === 'zh' ? '服务所在国家' : 'Service Country'} <span className="text-rose-500 font-bold">*</span>
+              </label>
               <select 
                 value={country}
                 onChange={e => setCountry(e.target.value)}
@@ -306,7 +390,7 @@ function ComposeModal({ defaultType, onClose }: { defaultType: ServiceType, onCl
                   placeholder={lang === 'zh' ? '输入宣传海报/作品首图 URL 网址，或右侧上传' : 'Insert Cover URL, or upload'}
                   value={coverImage}
                   onChange={e => setCoverImage(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-xs"
+                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-xs animate-fadeIn"
                 />
                 <ImageUpload 
                   onUpload={(url) => setCoverImage(url)} 
@@ -330,14 +414,25 @@ function ComposeModal({ defaultType, onClose }: { defaultType: ServiceType, onCl
           </div>
 
           <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">
+              {lang === 'zh' ? '服务介绍与报价详情' : 'Service Description & Rates'} <span className="text-rose-500 font-bold">*</span>
+            </label>
             <textarea 
-              required
               rows={5}
               value={content}
+              onBlur={() => setTouched(true)}
               onChange={e => setContent(e.target.value)}
               placeholder={t('srv.modal.desc')}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2 text-sm"
+              className={cn(
+                "w-full px-3 py-2 bg-white/5 border text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2 text-sm transition-colors",
+                touched && !content.trim() ? "border-rose-500/60 focus:ring-rose-500/50" : "border-white/10"
+              )}
             />
+            {touched && !content.trim() && (
+              <p className="text-xs text-rose-400 font-semibold mb-2 animate-fadeIn">
+                ⚠️ {lang === 'zh' ? '服务描述内容不能为空，请先填写内容哦！' : 'Service details are required!'}
+              </p>
+            )}
             <div className="flex justify-start">
               <ImageUpload onUpload={(url) => setContent(prev => prev + `\n![图片](${url})\n`)} />
             </div>
@@ -348,7 +443,9 @@ function ComposeModal({ defaultType, onClose }: { defaultType: ServiceType, onCl
               disabled={isSubmitting || !content.trim()}
               className="w-full py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 text-sm"
             >
-              {isSubmitting ? t('srv.modal.submitting') : t('srv.modal.submit')}
+              {isSubmitting 
+                ? (lang === 'zh' ? '正在保存中...' : 'Saving...') 
+                : (isEdit ? (lang === 'zh' ? '保存更改' : 'Save Changes') : t('srv.modal.submit'))}
             </button>
           </div>
         </form>

@@ -34,8 +34,9 @@ export interface Activity {
   description: string;
   link: string;
   creatorId: string;
-  participants: { uid: string; role: string; notes?: string }[];
+  participants: { uid: string; role: string; notes?: string; displayName?: string; photoURL?: string }[];
   createdAt: any;
+  country?: string;
 }
 
 export interface Post {
@@ -44,7 +45,12 @@ export interface Post {
   subCategory?: string;
   content: string;
   authorId: string;
+  authorName?: string;
+  authorPhoto?: string;
   createdAt: any;
+  country?: string;
+  coverImage?: string;
+  videoLink?: string;
 }
 
 export interface ServiceAd {
@@ -52,5 +58,10 @@ export interface ServiceAd {
   type: ServiceType;
   content: string;
   authorId: string;
+  authorName?: string;
+  authorPhoto?: string;
   createdAt: any;
+  country?: string;
+  coverImage?: string;
+  videoLink?: string;
 }

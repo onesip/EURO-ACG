@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, addDoc, serverTimestamp, onSnapshot, where } from 'firebase/firestore';
+import { collection, query, addDoc, serverTimestamp, onSnapshot, where, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
@@ -8,12 +8,14 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { Post } from '../types';
-import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles } from 'lucide-react';
+import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 export default function MarketPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<Post | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
 
@@ -92,6 +94,58 @@ export default function MarketPage() {
                 {t('mkt.contact')}
               </button>
             </div>
+
+            {user && post.authorId === user.uid && (
+              <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-white/5 border-dashed">
+                {confirmDeleteId === post.id ? (
+                  <div className="flex items-center gap-1.5 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-xl">
+                    <span className="text-[10px] text-rose-400 font-bold">{lang === 'zh' ? '确定下架？' : 'Delete?'}</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await deleteDoc(doc(db, 'posts', post.id));
+                          setConfirmDeleteId(null);
+                        } catch (err) {
+                          console.error(err);
+                          alert('Delete failed');
+                        }
+                      }}
+                      className="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-1.5 py-0.5 rounded transition-colors"
+                    >
+                      {lang === 'zh' ? '是' : 'Yes'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="text-[9px] text-slate-400 hover:text-slate-200 px-1"
+                    >
+                      {lang === 'zh' ? '否' : 'No'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingItem(post);
+                      }}
+                      className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
+                    >
+                      <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(post.id)}
+                      className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-xl transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> {lang === 'zh' ? '下架' : 'Remove'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mt-auto">
               <CommentSection parentCollection="posts" parentId={post.id} />
             </div>
@@ -105,8 +159,14 @@ export default function MarketPage() {
         )}
       </div>
 
-      {isComposeOpen && (
-        <ComposeMarketModal onClose={() => setIsComposeOpen(false)} />
+      {(isComposeOpen || editingItem) && (
+        <ComposeMarketModal 
+          editItem={editingItem || undefined}
+          onClose={() => {
+            setIsComposeOpen(false);
+            setEditingItem(null);
+          }} 
+        />
       )}
 
       {/* Mobile Floating Action Button */}
@@ -121,30 +181,46 @@ export default function MarketPage() {
   );
 }
 
-function ComposeMarketModal({ onClose }: { onClose: () => void }) {
+function ComposeMarketModal({ editItem, onClose }: { editItem?: Post, onClose: () => void }) {
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
-  const [content, setContent] = useState('');
-  const [coverImage, setCoverImage] = useState('');
-  const [videoLink, setVideoLink] = useState('');
+  const [content, setContent] = useState(editItem ? editItem.content : '');
+  const [coverImage, setCoverImage] = useState(editItem?.coverImage || '');
+  const [videoLink, setVideoLink] = useState(editItem?.videoLink || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [touched, setTouched] = useState(false);
+
+  const isEdit = !!editItem;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert('Must be logged in');
+    if (!content.trim()) {
+      setTouched(true);
+      return;
+    }
     setIsSubmitting(true);
     
     try {
-      await addDoc(collection(db, 'posts'), {
-        type: 'market',
-        content,
-        coverImage,
-        videoLink,
-        authorId: user.uid,
-        authorName: profile?.displayName || 'User',
-        authorPhoto: profile?.photoURL || '',
-        createdAt: serverTimestamp()
-      });
+      if (isEdit) {
+        await updateDoc(doc(db, 'posts', editItem.id), {
+          content,
+          coverImage,
+          videoLink,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'posts'), {
+          type: 'market',
+          content,
+          coverImage,
+          videoLink,
+          authorId: user.uid,
+          authorName: profile?.displayName || 'User',
+          authorPhoto: profile?.photoURL || '',
+          createdAt: serverTimestamp()
+        });
+      }
       onClose();
     } catch (error) {
       console.error(error);
@@ -160,7 +236,11 @@ function ComposeMarketModal({ onClose }: { onClose: () => void }) {
         <div className="flex justify-between items-center p-5 border-b border-white/5">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-lg font-bold text-white">{t('mkt.modal.title')}</h2>
+            <h2 className="text-lg font-bold text-white">
+              {isEdit 
+                ? (lang === 'zh' ? '✏️ 编辑宝贝 / Edit Item' : '✏️ Edit Item') 
+                : t('mkt.modal.title')}
+            </h2>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-white/5 transition-colors">
             <X className="w-5 h-5" />
@@ -189,7 +269,7 @@ function ComposeMarketModal({ onClose }: { onClose: () => void }) {
                   placeholder={lang === 'zh' ? '输入任意图片 URL 网址，或点击右侧上传' : 'Insert Cover Image URL, or upload'}
                   value={coverImage}
                   onChange={e => setCoverImage(e.target.value)}
-                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-xs"
+                  className="flex-1 px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-xs animate-fadeIn"
                 />
                 <ImageUpload 
                   onUpload={(url) => setCoverImage(url)} 
@@ -213,15 +293,25 @@ function ComposeMarketModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '宝贝描述' : 'Item Description'}</label>
+            <label className="block text-sm font-medium text-slate-400 mb-1">
+              {lang === 'zh' ? '宝贝描述' : 'Item Description'} <span className="text-rose-500 font-bold">*</span>
+            </label>
             <textarea 
-              required
               rows={5}
               value={content}
+              onBlur={() => setTouched(true)}
               onChange={e => setContent(e.target.value)}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2 text-sm"
+              className={cn(
+                "w-full px-3 py-2 bg-white/5 border text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2 text-sm transition-colors",
+                touched && !content.trim() ? "border-rose-500/60 focus:ring-rose-500/50" : "border-white/10"
+              )}
               placeholder={t('mkt.modal.desc')}
             />
+            {touched && !content.trim() && (
+              <p className="text-xs text-rose-400 font-semibold mb-2 animate-fadeIn">
+                ⚠️ {lang === 'zh' ? '描述内容不能为空哦！' : 'Description is required!'}
+              </p>
+            )}
             <div className="flex justify-start">
               <ImageUpload onUpload={(url) => setContent(prev => prev + `\n![图片](${url})\n`)} />
             </div>
@@ -232,7 +322,9 @@ function ComposeMarketModal({ onClose }: { onClose: () => void }) {
               disabled={isSubmitting || !content.trim()}
               className="w-full py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 text-sm"
             >
-              {isSubmitting ? t('mkt.modal.submitting') : t('mkt.modal.submit')}
+              {isSubmitting 
+                ? (lang === 'zh' ? '保存中...' : 'Saving...') 
+                : (isEdit ? (lang === 'zh' ? '保存更改' : 'Save Changes') : t('mkt.modal.submit'))}
             </button>
           </div>
         </form>

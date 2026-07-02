@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -8,7 +8,7 @@ import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { Post, PostType } from '../types';
-import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles } from 'lucide-react';
+import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles, Edit, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const EUROPEAN_COUNTRIES = [
@@ -37,6 +37,8 @@ export default function CommunityPage() {
   const [activeSubCategory, setActiveSubCategory] = useState<string>('all');
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
 
@@ -196,13 +198,66 @@ export default function CommunityPage() {
               <div className="mb-4">
                 <PostContent content={post.content} />
               </div>
-              <div className="flex items-center gap-6 mt-4 pt-4 border-t border-white/5">
-                <button className="flex items-center gap-1.5 text-slate-400 hover:text-rose-400 transition-colors text-sm font-medium">
-                  <Heart className="w-4 h-4" /> {t('com.like')}
-                </button>
-                <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
-                  <MessageCircle className="w-4 h-4" /> {t('com.comment')}
-                </button>
+              <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
+                <div className="flex items-center gap-6">
+                  <button className="flex items-center gap-1.5 text-slate-400 hover:text-rose-400 transition-colors text-sm font-medium">
+                    <Heart className="w-4 h-4" /> {t('com.like')}
+                  </button>
+                  <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
+                    <MessageCircle className="w-4 h-4" /> {t('com.comment')}
+                  </button>
+                </div>
+
+                {user && post.authorId === user.uid && (
+                  <div className="flex items-center gap-3">
+                    {confirmDeleteId === post.id ? (
+                      <div className="flex items-center gap-2 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-xl">
+                        <span className="text-[11px] text-rose-400 font-bold">{lang === 'zh' ? '确定删除该帖子吗？' : 'Delete this post?'}</span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              await deleteDoc(doc(db, 'posts', post.id));
+                              setConfirmDeleteId(null);
+                            } catch (err) {
+                              console.error(err);
+                              alert('Delete failed');
+                            }
+                          }}
+                          className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-2.5 py-1 rounded-lg transition-colors"
+                        >
+                          {lang === 'zh' ? '是的' : 'Yes'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-[10px] text-slate-400 hover:text-slate-200 px-1.5"
+                        >
+                          {lang === 'zh' ? '取消' : 'Cancel'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingPost(post);
+                          }}
+                          className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/10 hover:bg-indigo-500/20 px-2.5 py-1.5 rounded-xl transition-colors"
+                        >
+                          <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(post.id)}
+                          className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/10 hover:bg-rose-500/20 px-2.5 py-1.5 rounded-xl transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> {lang === 'zh' ? '删除' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               
               <CommentSection parentCollection="posts" parentId={post.id} />
@@ -216,10 +271,14 @@ export default function CommunityPage() {
         )}
       </div>
 
-      {isComposeOpen && (
+      {(isComposeOpen || editingPost) && (
         <ComposeModal 
           defaultType={activeTab} 
-          onClose={() => setIsComposeOpen(false)} 
+          editPost={editingPost || undefined}
+          onClose={() => {
+            setIsComposeOpen(false);
+            setEditingPost(null);
+          }} 
         />
       )}
 
@@ -235,31 +294,48 @@ export default function CommunityPage() {
   );
 }
 
-function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose: () => void }) {
+function ComposeModal({ defaultType, editPost, onClose }: { defaultType: PostType, editPost?: Post, onClose: () => void }) {
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
-  const [content, setContent] = useState('');
-  const [type, setType] = useState<PostType>(defaultType);
-  const [subCategory, setSubCategory] = useState<string>('cosplay');
-  const [country, setCountry] = useState<string>('ALL');
+  const [content, setContent] = useState(editPost ? editPost.content : '');
+  const [type, setType] = useState<PostType>(editPost ? editPost.type : defaultType);
+  const [subCategory, setSubCategory] = useState<string>(editPost?.subCategory || 'cosplay');
+  const [country, setCountry] = useState<string>(editPost?.country || 'ALL');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [touched, setTouched] = useState(false);
+
+  const isEdit = !!editPost;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert('Must be logged in');
+    if (!content.trim()) {
+      setTouched(true);
+      return;
+    }
     setIsSubmitting(true);
     
     try {
-      await addDoc(collection(db, 'posts'), {
-        type,
-        ...(type === 'tips' ? { subCategory } : {}),
-        content,
-        country,
-        authorId: user.uid,
-        authorName: profile?.displayName || 'User',
-        authorPhoto: profile?.photoURL || '',
-        createdAt: serverTimestamp()
-      });
+      if (isEdit) {
+        await updateDoc(doc(db, 'posts', editPost.id), {
+          type,
+          ...(type === 'tips' ? { subCategory } : {}),
+          content,
+          country,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'posts'), {
+          type,
+          ...(type === 'tips' ? { subCategory } : {}),
+          content,
+          country,
+          authorId: user.uid,
+          authorName: profile?.displayName || 'User',
+          authorPhoto: profile?.photoURL || '',
+          createdAt: serverTimestamp()
+        });
+      }
       onClose();
     } catch (error) {
       console.error(error);
@@ -275,7 +351,11 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
         <div className="flex justify-between items-center p-5 border-b border-white/5">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-lg font-bold text-white">{t('com.modal.title')}</h2>
+            <h2 className="text-lg font-bold text-white">
+              {isEdit 
+                ? (lang === 'zh' ? '✏️ 编辑帖子 / Edit Post' : '✏️ Edit Post') 
+                : t('com.modal.title')}
+            </h2>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-white/5 transition-colors">
             <X className="w-5 h-5" />
@@ -285,7 +365,9 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '分类类型' : 'Post Type'}</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {lang === 'zh' ? '分类类型' : 'Post Type'} <span className="text-rose-500 font-bold">*</span>
+              </label>
               <select 
                 value={type}
                 onChange={e => setType(e.target.value as PostType)}
@@ -299,7 +381,9 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '所属国家圈子' : 'Circle Country'}</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {lang === 'zh' ? '所属国家圈子' : 'Circle Country'} <span className="text-rose-500 font-bold">*</span>
+              </label>
               <select 
                 value={country}
                 onChange={e => setCountry(e.target.value)}
@@ -317,7 +401,9 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
           
           {type === 'tips' && (
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">安利分类</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                安利分类 <span className="text-rose-500 font-bold">*</span>
+              </label>
               <select 
                 value={subCategory}
                 onChange={e => setSubCategory(e.target.value)}
@@ -332,14 +418,25 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
           )}
 
           <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">
+              {lang === 'zh' ? '帖子内容' : 'Post Content'} <span className="text-rose-500 font-bold">*</span>
+            </label>
             <textarea 
-              required
               rows={5}
               value={content}
+              onBlur={() => setTouched(true)}
               onChange={e => setContent(e.target.value)}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2 text-sm"
+              className={cn(
+                "w-full px-3 py-2 bg-white/5 border text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none placeholder-slate-500 mb-2 text-sm transition-colors",
+                touched && !content.trim() ? "border-rose-500/60 focus:ring-rose-500/50" : "border-white/10"
+              )}
               placeholder={lang === 'zh' ? '在此处畅所欲言，支持贴图和添加链接哦' : 'Write your post here...'}
             />
+            {touched && !content.trim() && (
+              <p className="text-xs text-rose-400 font-semibold mb-2 animate-fadeIn">
+                ⚠️ {lang === 'zh' ? '内容不能为空，请先填写内容哦！' : 'Content is required, please fill it in!'}
+              </p>
+            )}
             <div className="flex justify-start">
               <ImageUpload onUpload={(url) => setContent(prev => prev + `\n![图片](${url})\n`)} />
             </div>
@@ -350,7 +447,9 @@ function ComposeModal({ defaultType, onClose }: { defaultType: PostType, onClose
               disabled={isSubmitting || !content.trim()}
               className="w-full py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 text-sm"
             >
-              {isSubmitting ? t('com.modal.submitting') : t('com.modal.submit')}
+              {isSubmitting 
+                ? (lang === 'zh' ? '提交保存中...' : 'Saving...') 
+                : (isEdit ? (lang === 'zh' ? '保存更改' : 'Save Changes') : t('com.modal.submit'))}
             </button>
           </div>
         </form>

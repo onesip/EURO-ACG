@@ -7,8 +7,9 @@ import LocationInput from '../components/LocationInput';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { Activity } from '../types';
-import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles } from 'lucide-react';
-import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, query, orderBy } from 'firebase/firestore';
+import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2 } from 'lucide-react';
+import { collection, onSnapshot, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc } from 'firebase/firestore';
+import { cn } from '../lib/utils';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
@@ -27,6 +28,8 @@ export default function ActivitiesPage() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
 
@@ -182,16 +185,69 @@ export default function ActivitiesPage() {
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={() => handleJoin(activity.id, !isParticipant)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                    isParticipant 
-                      ? 'bg-white/5 text-slate-300 hover:bg-white/10' 
-                      : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
-                  }`}
-                >
-                  {isParticipant ? t('act.cancelJoin') : t('act.join')}
-                </button>
+                <div className="flex items-center gap-2">
+                  {user && activity.creatorId === user.uid && (
+                    <div className="flex items-center gap-1.5">
+                      {confirmDeleteId === activity.id ? (
+                        <div className="flex items-center gap-1 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-2 py-1 rounded-lg">
+                          <span className="text-[10px] text-rose-400 font-bold">{lang === 'zh' ? '确定删除？' : 'Delete?'}</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await deleteDoc(doc(db, 'activities', activity.id));
+                                setConfirmDeleteId(null);
+                              } catch (err) {
+                                console.error(err);
+                                alert('Delete failed');
+                              }
+                            }}
+                            className="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-1.5 py-0.5 rounded transition-colors"
+                          >
+                            {lang === 'zh' ? '是' : 'Yes'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="text-[9px] text-slate-400 hover:text-slate-200 px-1"
+                          >
+                            {lang === 'zh' ? '否' : 'No'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingActivity(activity);
+                            }}
+                            className="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300 font-bold bg-indigo-500/5 hover:bg-indigo-500/10 px-2.5 py-1.5 rounded-lg transition-colors"
+                          >
+                            <Edit className="w-3.5 h-3.5" /> {lang === 'zh' ? '编辑' : 'Edit'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(activity.id)}
+                            className="flex items-center gap-1 text-[11px] text-rose-400 hover:text-rose-300 font-bold bg-rose-500/5 hover:bg-rose-500/10 px-2.5 py-1.5 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> {lang === 'zh' ? '删除' : 'Delete'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => handleJoin(activity.id, !isParticipant)}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      isParticipant 
+                        ? 'bg-white/5 text-slate-300 hover:bg-white/10' 
+                        : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
+                    }`}
+                  >
+                    {isParticipant ? t('act.cancelJoin') : t('act.join')}
+                  </button>
+                </div>
               </div>
               
               <CommentSection parentCollection="activities" parentId={activity.id} />
@@ -205,43 +261,81 @@ export default function ActivitiesPage() {
         )}
       </div>
 
-      {isCreateModalOpen && (
-        <CreateActivityModal onClose={() => setIsCreateModalOpen(false)} />
+      {(isCreateModalOpen || editingActivity) && (
+        <CreateActivityModal 
+          editActivity={editingActivity || undefined}
+          onClose={() => {
+            setIsCreateModalOpen(false);
+            setEditingActivity(null);
+          }} 
+        />
       )}
     </div>
   );
 }
 
-function CreateActivityModal({ onClose }: { onClose: () => void }) {
+function CreateActivityModal({ editActivity, onClose }: { editActivity?: Activity, onClose: () => void }) {
   const { user } = useAuth();
   const { t, lang } = useLanguage();
   const [formData, setFormData] = useState({
-    title: '',
-    type: 'meetup',
-    date: '',
-    location: '',
-    description: '',
-    link: '',
-    country: 'NL',
+    title: editActivity?.title || '',
+    type: editActivity?.type || 'meetup',
+    date: editActivity?.date || '',
+    location: editActivity?.location || '',
+    description: editActivity?.description || '',
+    link: editActivity?.link || '',
+    country: editActivity?.country || 'NL',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const isEdit = !!editActivity;
+
+  const handleBlur = (field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
+  const isFormValid = () => {
+    return (
+      formData.title.trim() &&
+      formData.date.trim() &&
+      formData.location.trim() &&
+      formData.description.trim()
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return alert('Must be logged in');
+    if (!isFormValid()) {
+      setTouched({
+        title: true,
+        date: true,
+        location: true,
+        description: true,
+      });
+      return;
+    }
     setIsSubmitting(true);
     
     try {
-      await addDoc(collection(db, 'activities'), {
-        ...formData,
-        creatorId: user.uid,
-        participants: [],
-        createdAt: serverTimestamp()
-      });
+      if (isEdit) {
+        await updateDoc(doc(db, 'activities', editActivity.id), {
+          ...formData,
+          updatedAt: serverTimestamp()
+        });
+      } else {
+        await addDoc(collection(db, 'activities'), {
+          ...formData,
+          creatorId: user.uid,
+          participants: [],
+          createdAt: serverTimestamp()
+        });
+      }
       onClose();
     } catch (error) {
       console.error(error);
-      alert('Failed to create activity');
+      alert('Failed to save activity');
     } finally {
       setIsSubmitting(false);
     }
@@ -249,11 +343,15 @@ function CreateActivityModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-[#0A0A0B]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-[#141416] rounded-3xl border border-white/10 shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn">
+      <div className="bg-[#141416] rounded-3xl border border-white/10 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-none animate-fadeIn">
         <div className="flex justify-between items-center p-5 border-b border-white/5">
           <div className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-lg font-bold text-white">{t('act.modal.title')}</h2>
+            <h2 className="text-lg font-bold text-white">
+              {isEdit 
+                ? (lang === 'zh' ? '✏️ 编辑活动 / Edit Activity' : '✏️ Edit Activity') 
+                : t('act.modal.title')}
+            </h2>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-full hover:bg-white/5 transition-colors">
             <X className="w-5 h-5" />
@@ -261,20 +359,32 @@ function CreateActivityModal({ onClose }: { onClose: () => void }) {
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-1">{t('act.modal.name')}</label>
+            <label className="block text-sm font-medium text-slate-400 mb-1">
+              {t('act.modal.name')} <span className="text-rose-500 font-bold">*</span>
+            </label>
             <input 
-              required
               type="text" 
               value={formData.title}
+              onBlur={() => handleBlur('title')}
               onChange={e => setFormData({...formData, title: e.target.value})}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all text-sm"
+              className={cn(
+                "w-full px-3 py-2 bg-white/5 border text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all text-sm",
+                touched.title && !formData.title.trim() ? "border-rose-500/60 focus:ring-rose-500/50" : "border-white/10"
+              )}
               placeholder={lang === 'zh' ? 'e.g. 荷兰同好面基会 / 德国漫展组团' : 'e.g. Netherlands Meetup / Germany Cosplay group'}
             />
+            {touched.title && !formData.title.trim() && (
+              <p className="text-xs text-rose-400 font-semibold mt-1 animate-fadeIn">
+                ⚠️ {lang === 'zh' ? '活动名称不能为空！' : 'Activity name is required!'}
+              </p>
+            )}
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">{t('act.modal.type')}</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {t('act.modal.type')} <span className="text-rose-500 font-bold">*</span>
+              </label>
               <select 
                 value={formData.type}
                 onChange={e => setFormData({...formData, type: e.target.value})}
@@ -286,7 +396,9 @@ function CreateActivityModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">{lang === 'zh' ? '活动所属国家' : 'Activity Country'}</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {lang === 'zh' ? '活动所属国家' : 'Activity Country'} <span className="text-rose-500 font-bold">*</span>
+              </label>
               <select 
                 value={formData.country}
                 onChange={e => setFormData({...formData, country: e.target.value})}
@@ -303,36 +415,68 @@ function CreateActivityModal({ onClose }: { onClose: () => void }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">{t('act.modal.date')}</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {t('act.modal.date')} <span className="text-rose-500 font-bold">*</span>
+              </label>
               <input 
-                required
                 type="date" 
                 value={formData.date}
+                onBlur={() => handleBlur('date')}
                 onChange={e => setFormData({...formData, date: e.target.value})}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none color-scheme-dark text-sm"
+                className={cn(
+                  "w-full px-3 py-2 bg-white/5 border text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none color-scheme-dark text-sm",
+                  touched.date && !formData.date.trim() ? "border-rose-500/60 focus:ring-rose-500/50" : "border-white/10"
+                )}
               />
+              {touched.date && !formData.date.trim() && (
+                <p className="text-xs text-rose-400 font-semibold mt-1 animate-fadeIn">
+                  ⚠️ {lang === 'zh' ? '请选择日期！' : 'Please select a date!'}
+                </p>
+              )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">{t('act.modal.location')}</label>
+              <label className="block text-sm font-medium text-slate-400 mb-1">
+                {t('act.modal.location')} <span className="text-rose-500 font-bold">*</span>
+              </label>
               <LocationInput 
-                required
                 value={formData.location}
-                onChange={(value) => setFormData({...formData, location: value})}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-sm"
+                onChange={(value) => {
+                  setFormData({...formData, location: value});
+                  setTouched(prev => ({ ...prev, location: true }));
+                }}
+                className={cn(
+                  "w-full px-3 py-2 bg-white/5 border text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none text-sm",
+                  touched.location && !formData.location.trim() ? "border-rose-500/60 focus:ring-rose-500/50" : "border-white/10"
+                )}
               />
+              {touched.location && !formData.location.trim() && (
+                <p className="text-xs text-rose-400 font-semibold mt-1 animate-fadeIn">
+                  ⚠️ {lang === 'zh' ? '活动地点不能为空！' : 'Location is required!'}
+                </p>
+              )}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-400 mb-1">{t('act.modal.desc')}</label>
+            <label className="block text-sm font-medium text-slate-400 mb-1">
+              {t('act.modal.desc')} <span className="text-rose-500 font-bold">*</span>
+            </label>
             <textarea 
-              required
               rows={3}
               value={formData.description}
+              onBlur={() => handleBlur('description')}
               onChange={e => setFormData({...formData, description: e.target.value})}
-              className="w-full px-3 py-2 bg-white/5 border border-white/10 text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none mb-2 text-sm"
+              className={cn(
+                "w-full px-3 py-2 bg-white/5 border text-white rounded-xl focus:ring-2 focus:ring-indigo-500/50 outline-none resize-none mb-2 text-sm",
+                touched.description && !formData.description.trim() ? "border-rose-500/60 focus:ring-rose-500/50" : "border-white/10"
+              )}
               placeholder={lang === 'zh' ? '支持插入多张图片和文字叙述' : 'Explain meetup details and plan. Supports images.'}
             />
+            {touched.description && !formData.description.trim() && (
+              <p className="text-xs text-rose-400 font-semibold mb-1 animate-fadeIn">
+                ⚠️ {lang === 'zh' ? '活动描述不能为空！' : 'Description is required!'}
+              </p>
+            )}
             <div className="flex justify-start">
               <ImageUpload onUpload={(url) => setFormData(prev => ({...prev, description: prev.description + `\n![图片](${url})\n`}))} />
             </div>
@@ -352,10 +496,12 @@ function CreateActivityModal({ onClose }: { onClose: () => void }) {
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isFormValid()}
               className="w-full py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50 text-sm"
             >
-              {isSubmitting ? t('act.modal.submitting') : t('act.modal.submit')}
+              {isSubmitting 
+                ? (lang === 'zh' ? '正在保存中...' : 'Saving...') 
+                : (isEdit ? (lang === 'zh' ? '保存更改' : 'Save Changes') : t('act.modal.submit'))}
             </button>
           </div>
         </form>
