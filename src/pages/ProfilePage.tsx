@@ -66,13 +66,78 @@ export default function ProfilePage() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-center animate-fadeIn">
-        <h2 className="text-2xl font-bold text-white mb-2">Create Your Profile</h2>
-        <p className="text-slate-400 mb-6 max-w-md">Join the EUROACG community to connect with other fans, cosplayers, and photographers in Europe.</p>
-        <div className="p-6 bg-[#141416] border border-white/5 rounded-3xl mb-6 max-w-sm">
-          <p className="text-xs text-slate-400 leading-relaxed">
-            💡 <strong>登录提示:</strong> 点击下方按钮将呼出 Google / Apple 账户签到。若处于 Vercel 或自定义域名，请在 Firebase 的 Authorized Domains 里加白名单。
-          </p>
+      <div className="flex flex-col items-center justify-center py-10 text-center animate-fadeIn max-w-md mx-auto space-y-6">
+        <div className="w-full">
+          <h2 className="text-2xl font-bold text-white mb-2">{lang === 'zh' ? '本命档案库' : 'Create Your Profile'}</h2>
+          <p className="text-slate-400 mb-6 text-sm">{lang === 'zh' ? '加入 100% 纯粹的欧洲 ACG 圈子，寻找您的本命同好、金牌妆造与神仙摄影！' : 'Join the EUROACG community to connect with other fans, cosplayers, and photographers in Europe.'}</p>
+          <div className="p-6 bg-[#141416] border border-red-500/10 rounded-3xl mb-6 text-left">
+            <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <span>⚠️</span>
+              {lang === 'zh' ? '关于 Firebase 部署授权域名 (Vercel 用户必看)' : 'Firebase Authorized Domain Guide'}
+            </h4>
+            <p className="text-xs text-slate-400 leading-relaxed space-y-2">
+              {lang === 'zh' ? (
+                <>
+                  若是您将项目部署在 Vercel 或是其他自定义域名，在点击登录时会报错 <strong>auth/unauthorized-domain</strong>。这是由于 Firebase 为了安全只允许白名单域名访问。
+                  <br />
+                  <span className="text-white block mt-2 font-medium">💡 修复步骤：</span>
+                  1. 登录并打开您的 <strong>Firebase Console</strong>。
+                  <br />
+                  2. 依次进入 <strong>Authentication</strong> &rarr; <strong>Settings</strong> 选项卡。
+                  <br />
+                  3. 找到 <strong>Authorized domains</strong>（授权网域）列表。
+                  <br />
+                  4. 点击 <strong>Add domain</strong> 按钮，并添加您刚才部署的 Vercel 域名（例如：<code className="text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded">euro-acg.vercel.app</code>）。
+                  <br />
+                  5. 保存后即可完美顺畅登录！
+                </>
+              ) : (
+                <>
+                  If you deploy on Vercel or a custom domain, you will encounter the <strong>auth/unauthorized-domain</strong> error when logging in.
+                  <br />
+                  <span className="text-white block mt-2 font-medium">💡 How to Fix:</span>
+                  1. Log in to your <strong>Firebase Console</strong>.
+                  <br />
+                  2. Navigate to <strong>Authentication</strong> &rarr; <strong>Settings</strong> tab.
+                  <br />
+                  3. Find the <strong>Authorized domains</strong> list.
+                  <br />
+                  4. Click <strong>Add domain</strong> and add your Vercel URL (e.g., <code className="text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded">euro-acg.vercel.app</code>).
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* ACG Skins Customization for Guests */}
+        <div className="w-full bg-[#141416] p-6 rounded-3xl border border-white/5 space-y-4 text-left">
+          <div className="flex items-center gap-2 border-b border-white/5 pb-2">
+            <Palette className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-lg font-semibold text-white">{t('prof.skinChange')}</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {ACG_THEMES.map((theme) => {
+              const isActive = activeTheme.id === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  onClick={() => setThemeById(theme.id)}
+                  type="button"
+                  className={cn(
+                    "flex flex-col items-center gap-2 p-4 rounded-2xl border text-xs cursor-pointer transition-all text-center",
+                    isActive 
+                      ? "bg-indigo-500/10 border-indigo-500 text-white font-bold scale-105 shadow-md" 
+                      : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                  )}
+                >
+                  <div className="w-6 h-6 rounded-full border border-white/10 flex items-center justify-center p-0.5" style={{ backgroundColor: `rgb(${theme.colors.theme500})` }}>
+                    <div className="w-2 h-2 rounded-full bg-white" />
+                  </div>
+                  <span>{theme.name.split(' (')[0]}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );

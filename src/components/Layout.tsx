@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles } from 'lucide-react';
+import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { loginWithGoogle, loginWithApple, logout } from '../lib/firebase';
 import { cn } from '../lib/utils';
+import { useTheme, ACG_THEMES } from './ThemeProvider';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, profile } = useAuth();
   const location = useLocation();
   const { t, lang, setLang } = useLanguage();
+  const { activeTheme, setThemeById } = useTheme();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   const navItems = [
@@ -23,11 +25,33 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const LanguageToggle = () => (
     <button 
       onClick={() => setLang(lang === 'en' ? 'zh' : 'en')}
-      className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-400 hover:text-white transition-colors rounded-full hover:bg-white/5"
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-400 hover:text-white transition-colors rounded-full hover:bg-white/5 shrink-0"
     >
-      <Globe className="w-4 h-4" />
-      {lang === 'en' ? '中文' : 'English'}
+      <Globe className="w-3.5 h-3.5" />
+      {lang === 'en' ? '中文' : 'EN'}
     </button>
+  );
+
+  const ThemeRow = () => (
+    <div className="flex items-center gap-1.5">
+      {ACG_THEMES.map((theme) => {
+        const isActive = activeTheme.id === theme.id;
+        return (
+          <button
+            key={theme.id}
+            onClick={() => setThemeById(theme.id)}
+            title={lang === 'zh' ? theme.name : theme.nameEn}
+            className={cn(
+              "w-3.5 h-3.5 rounded-full transition-transform hover:scale-125 focus:outline-none relative flex items-center justify-center",
+              isActive ? "scale-110 ring-1 ring-white/50 ring-offset-1 ring-offset-[#141416]" : ""
+            )}
+            style={{ backgroundColor: `rgb(${theme.colors.theme500})` }}
+          >
+            {isActive && <div className="w-1 h-1 rounded-full bg-white" />}
+          </button>
+        );
+      })}
+    </div>
   );
 
   return (
@@ -39,7 +63,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <h1 className="text-2xl font-bold tracking-tight text-white">Euro<span className="text-indigo-400 font-light">ACG</span></h1>
             <LanguageToggle />
           </div>
-          <p className="text-sm text-slate-400">European ACG Community</p>
+          <p className="text-sm text-slate-400 mb-3">European ACG Community</p>
+          <div className="flex items-center justify-between gap-1 border-t border-white/5 pt-3">
+            <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1">
+              <Palette className="w-3.5 h-3.5" />
+              {lang === 'zh' ? '主题皮肤' : 'Skins'}
+            </span>
+            <ThemeRow />
+          </div>
         </div>
         
         <nav className="flex-1 px-4 space-y-2">
@@ -113,7 +144,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         {/* Mobile Header with Language Toggle */}
         <div className="md:hidden fixed top-0 inset-x-0 h-14 bg-[#141416]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 z-50">
            <h1 className="text-lg font-bold tracking-tight text-white">EUROACG</h1>
-           <LanguageToggle />
+           <div className="flex items-center gap-3">
+             <ThemeRow />
+             <span className="w-[1px] h-4 bg-white/10" />
+             <LanguageToggle />
+           </div>
         </div>
         {children}
       </main>
@@ -184,7 +219,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex flex-col items-center text-center space-y-4 mb-6 relative z-10">
               <div className="w-20 h-20 rounded-2xl bg-indigo-500/5 border border-white/5 p-1 overflow-hidden">
                 <img 
-                  src="/src/assets/images/euroacg_logo_1782999839357.jpg" 
+                  src="/logo.jpg" 
                   alt="EUROACG Logo" 
                   className="w-full h-full object-cover rounded-xl"
                   referrerPolicy="no-referrer"
