@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
 import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -90,7 +91,7 @@ export default function ServicesPage() {
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
       try {
-        const q = query(collection(db, 'services'), limit(20));
+        const q = query(collection(db, 'services'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
         const snapshot = await getDocs(q);
         
         const adsData = snapshot.docs.map(doc => ({
@@ -362,7 +363,7 @@ export default function ServicesPage() {
               {/* Reviews/Comments */}
               <div className="mt-4 pt-4 border-t border-white/5">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
-                  Reviews & Comments <CommentCount parentCollection="services" parentId={ad.id} />
+                  Reviews & Comments ({ad.commentCount ?? 0})
                 </h4>
                 <CommentSection parentCollection="services" parentId={ad.id} />
               </div>
@@ -375,6 +376,14 @@ export default function ServicesPage() {
           </div>
         )}
       </div>
+
+      {!user && ads.length >= GUEST_LIST_LIMIT && (
+        <div className="text-center py-6 mt-4 border-t border-white/5">
+          <p className="text-sm text-slate-400">
+            {lang === 'zh' ? '登录后查看更多内容，并加入欧洲二次元同好社区。' : 'Log in to explore more posts and connect with the Euro ACG community.'}
+          </p>
+        </div>
+      )}
 
       {(isComposeOpen || editingAd) && (
         <ComposeModal 
@@ -442,6 +451,8 @@ function ComposeModal({ defaultType, editAd, onClose }: { defaultType: ServiceTy
           authorName: profile?.displayName || 'User',
           authorPhoto: profile?.photoURL || '',
           supports: [],
+          commentCount: 0,
+          likeCount: 0,
           createdAt: serverTimestamp()
         });
       }

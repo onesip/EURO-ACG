@@ -9,9 +9,9 @@ import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { isQuotaExceeded } from '../lib/quota';
 import UserAvatar from '../components/UserAvatar';
-import CommentCount from '../components/CommentCount';
 import { Activity } from '../types';
 import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
+import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
 import { collection, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { cn } from '../lib/utils';
@@ -54,7 +54,7 @@ export default function ActivitiesPage() {
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
       try {
-        const q = query(collection(db, 'activities'), limit(20));
+        const q = query(collection(db, 'activities'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
         const snapshot = await getDocs(q);
         
         const activitiesData = snapshot.docs.map(doc => ({
@@ -342,7 +342,7 @@ export default function ActivitiesPage() {
                     }`}
                   >
                     {isParticipant ? t('act.cancelJoin') : t('act.join')}
-                    <CommentCount parentCollection="activities" parentId={activity.id} />
+                    ({activity.commentCount ?? 0})
                   </button>
                 </div>
               
@@ -356,6 +356,14 @@ export default function ActivitiesPage() {
           </div>
         )}
       </div>
+
+      {!user && activities.length >= GUEST_LIST_LIMIT && (
+        <div className="text-center py-6 mt-4 border-t border-white/5">
+          <p className="text-sm text-slate-400">
+            {lang === 'zh' ? '登录后查看更多内容，并加入欧洲二次元同好社区。' : 'Log in to explore more posts and connect with the Euro ACG community.'}
+          </p>
+        </div>
+      )}
 
       {(isCreateModalOpen || editingActivity) && (
         <CreateActivityModal 
@@ -426,6 +434,7 @@ function CreateActivityModal({ editActivity, onClose }: { editActivity?: Activit
           creatorId: user.uid,
           participants: [],
           commentCount: 0,
+          likeCount: 0,
           createdAt: serverTimestamp()
         });
       }

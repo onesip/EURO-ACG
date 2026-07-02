@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment } from 'firebase/firestore';
+import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -55,12 +56,27 @@ export default function CommunityPage() {
       return;
     }
     const postRef = doc(db, 'posts', postId);
-    const hasLiked = currentLikes.includes(user.uid);
     
     try {
-      await updateDoc(postRef, { 
-        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
-        likeCount: increment(hasLiked ? -1 : 1)
+      await runTransaction(db, async (transaction) => {
+        const postDoc = await transaction.get(postRef);
+        if (!postDoc.exists()) throw "Post does not exist!";
+        
+        const postData = postDoc.data();
+        const likes = postData.likes || [];
+        const isCurrentlyLiked = likes.includes(user.uid);
+
+        if (isCurrentlyLiked) {
+          transaction.update(postRef, { 
+            likes: arrayRemove(user.uid),
+            likeCount: increment(-1)
+          });
+        } else {
+          transaction.update(postRef, { 
+            likes: arrayUnion(user.uid),
+            likeCount: increment(1)
+          });
+        }
       });
     } catch (err) {
       console.error("Failed to like post", err);
@@ -91,7 +107,7 @@ export default function CommunityPage() {
       if (isQuotaExceeded()) return;
       try {
         // Remove server-side orderBy to avoid index issues and handle missing createdAt
-        const q = query(collection(db, 'posts'), limit(20));
+        const q = query(collection(db, 'posts'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
         const snapshot = await getDocs(q);
         
         const postsData = snapshot.docs.map(doc => ({
@@ -297,10 +313,10 @@ export default function CommunityPage() {
                     )}
                   >
                     <Heart className={cn("w-4 h-4 transition-transform active:scale-125 duration-200", user && post.likes?.includes(user.uid) ? "fill-rose-500/80 stroke-rose-400" : "")} /> 
-                    <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likeCount || 0})</span>
+                    <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likeCount ?? 0})</span>
                   </button>
                   <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
-                    <MessageCircle className="w-4 h-4" /> {t('com.comment')} ({post.commentCount || 0})
+                    <MessageCircle className="w-4 h-4" /> {t('com.comment')} ({post.commentCount ?? 0})
                   </button>
                 </div>
 
@@ -412,6 +428,14 @@ export default function CommunityPage() {
         )}
       </div>
 
+      {!user && posts.length >= GUEST_LIST_LIMIT && (
+        <div className="text-center py-6 mt-4 border-t border-white/5">
+          <p className="text-sm text-slate-400">
+            {lang === 'zh' ? '登录后查看更多内容，并加入欧洲二次元同好社区。' : 'Log in to explore more posts and connect with the Euro ACG community.'}
+          </p>
+        </div>
+      )}
+
       {(isComposeOpen || editingPost) && (
         <ComposeModal 
           defaultType={activeTab} 
@@ -474,7 +498,6 @@ function ComposeModal({ defaultType, editPost, onClose }: { defaultType: PostTyp
           authorId: user.uid,
           authorName: profile?.displayName || 'User',
           authorPhoto: profile?.photoURL || '',
-          likes: [],
           likeCount: 0,
           commentCount: 0,
           createdAt: serverTimestamp()

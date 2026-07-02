@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, getDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, updateDoc, setDoc, orderBy } from 'firebase/firestore';
+import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
+import { doc, getDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, updateDoc, setDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { UserProfile, UserRole, Gender, UserReview, FriendRequest } from '../types';
 import { useLanguage } from './LanguageProvider';
@@ -121,7 +122,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
 
     // Fetch Reviews
     const reviewsRef = collection(db, 'users', profileUid, 'reviews');
-    const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'));
+    const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
     const unsubReviews = onSnapshot(qReviews, (snap) => {
       setReviews(snap.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview));
     });

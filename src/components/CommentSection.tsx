@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, getDocs, increment, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, orderBy, serverTimestamp, getDocs, increment, doc, runTransaction, limit } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
@@ -26,7 +26,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
       try {
-        const q = query(collection(db, parentCollection, parentId, 'comments'));
+        const q = query(collection(db, parentCollection, parentId, 'comments'), orderBy('createdAt', 'desc'), limit(20));
         const snapshot = await getDocs(q);
         
         const commentsData = snapshot.docs.map(doc => ({ 
@@ -54,15 +54,20 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
     e.preventDefault();
     if (!user || !content.trim()) return;
     try {
-      await addDoc(collection(db, parentCollection, parentId, 'comments'), {
-        content: content.trim(),
-        authorId: user.uid,
-        authorName: profile?.displayName || 'User',
-        authorPhoto: profile?.photoURL || '',
-        createdAt: serverTimestamp()
-      });
-      await updateDoc(doc(db, parentCollection, parentId), {
-        commentCount: increment(1)
+      const parentDocRef = doc(db, parentCollection, parentId);
+      const newCommentRef = doc(collection(db, parentCollection, parentId, 'comments'));
+      
+      await runTransaction(db, async (transaction) => {
+        transaction.set(newCommentRef, {
+          content: content.trim(),
+          authorId: user.uid,
+          authorName: profile?.displayName || 'User',
+          authorPhoto: profile?.photoURL || '',
+          createdAt: serverTimestamp()
+        });
+        transaction.update(parentDocRef, {
+          commentCount: increment(1)
+        });
       });
       setContent('');
     } catch (error) {
