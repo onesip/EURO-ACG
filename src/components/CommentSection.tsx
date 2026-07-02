@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { useUserProfileModal } from './UserProfileModal';
-import { Send } from 'lucide-react';
+import { Send, MessageCircle } from 'lucide-react';
 
 export default function CommentSection({ parentCollection, parentId }: { parentCollection: 'activities' | 'posts' | 'services', parentId: string }) {
   const [comments, setComments] = useState<any[]>([]);
@@ -44,17 +44,17 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
     <div className="mt-4 pt-4 border-t border-white/5 space-y-4">
       {/* Header with Count and Danmaku Toggle */}
       <div className="flex justify-between items-center mb-2 px-1">
-        <div className="flex items-center gap-1.5">
-          <div className="w-1 h-3 bg-indigo-500 rounded-full" />
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            {comments.length} {t('comment.count') || (t('common.lang') === 'zh' ? '条评论' : 'Comments')}
+        <div className="flex items-center gap-1.5 text-slate-400">
+          <MessageCircle className="w-3.5 h-3.5" />
+          <span className="text-xs font-bold uppercase tracking-wider">
+            {t('common.lang') === 'zh' ? '吐槽' : 'Comments'} ({comments.length})
           </span>
         </div>
         <button 
           onClick={() => setIsDanmaku(!isDanmaku)}
-          className={`text-[10px] font-bold px-2 py-1 rounded-lg transition-all border ${isDanmaku ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' : 'bg-white/5 text-slate-500 border-white/5'}`}
+          className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-all border ${isDanmaku ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' : 'bg-white/5 text-slate-500 border-white/5'}`}
         >
-          {isDanmaku ? '弹幕模式：开' : '弹幕模式：关'}
+          {isDanmaku ? '弹幕：开' : '弹幕：关'}
         </button>
       </div>
 

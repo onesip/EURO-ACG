@@ -223,11 +223,12 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   };
 
   const getGenderIcon = (gender?: Gender) => {
+    const iconClass = "flex items-center justify-center leading-none -mt-0.5";
     switch (gender) {
-      case 'male': return <span className="text-blue-400" title="Male">♂️</span>;
-      case 'female': return <span className="text-pink-400" title="Female">♀️</span>;
-      case 'non-binary': return <span className="text-purple-400" title="Non-binary">⚧️</span>;
-      case 'other': return <span className="text-amber-400" title="Other">✨</span>;
+      case 'male': return <span className={cn("text-blue-400", iconClass)} title="Male">♂️</span>;
+      case 'female': return <span className={cn("text-pink-400", iconClass)} title="Female">♀️</span>;
+      case 'non-binary': return <span className={cn("text-purple-400", iconClass)} title="Non-binary">⚧️</span>;
+      case 'other': return <span className={cn("text-amber-400", iconClass)} title="Other">✨</span>;
       default: return null;
     }
   };
@@ -294,8 +295,10 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                       
                       {/* Gender Badge */}
                       {!loading && currentProfile.gender && (
-                        <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#141416] border-2 border-indigo-500/50 rounded-full flex items-center justify-center shadow-lg z-10 animate-scaleIn">
-                          {getGenderIcon(currentProfile.gender)}
+                        <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#141416] border-2 border-indigo-500/50 rounded-full flex items-center justify-center shadow-xl z-10 animate-scaleIn overflow-hidden">
+                          <div className="text-base flex items-center justify-center">
+                            {getGenderIcon(currentProfile.gender)}
+                          </div>
                         </div>
                       )}
                     </div>
