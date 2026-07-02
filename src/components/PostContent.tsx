@@ -6,8 +6,8 @@ interface PostContentProps {
 }
 
 export default function PostContent({ content }: PostContentProps) {
-  // Regex to find markdown images ![alt](url)
-  const mdImgRegex = /!\[.*?\]\((https?:\/\/[^\s]+)\)/g;
+  // Regex to find markdown images ![alt](url), supporting both http/https and base64 data URLs
+  const mdImgRegex = /!\[.*?\]\(((?:https?:\/\/|data:image\/)[^\s)]+)\)/g;
   
   // Extract images
   const images = Array.from(content.matchAll(mdImgRegex)).map(m => m[1]);
