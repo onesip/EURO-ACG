@@ -8,11 +8,12 @@ import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { isQuotaExceeded } from '../lib/quota';
+import QuotaBanner from '../components/QuotaBanner';
 import UserAvatar from '../components/UserAvatar';
 import { Activity } from '../types';
 import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
-import { collection, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { cn } from '../lib/utils';
 
@@ -54,8 +55,18 @@ export default function ActivitiesPage() {
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
       try {
-        const q = query(collection(db, 'activities'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+        let q = query(collection(db, 'activities'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+        
+        if (selectedCountry !== 'ALL') {
+          q = query(
+            collection(db, 'activities'),
+            where('country', '==', selectedCountry),
+            limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
+          );
+        }
+
         const snapshot = await getDocs(q);
+        setQuotaExceeded(false); // Success! Clear quota if it was set
         
         const activitiesData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -74,7 +85,7 @@ export default function ActivitiesPage() {
         setActivities(activitiesData);
         localStorage.setItem('cached_activities', JSON.stringify(activitiesData));
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+        if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else {
           console.error("Activities fetch error:", error);
@@ -82,7 +93,7 @@ export default function ActivitiesPage() {
       }
     };
     fetchData();
-  }, [user]);
+  }, [user, selectedCountry]);
 
   const handlePin = async (activityId: string, currentlyPinned: boolean = false) => {
     if (!isAdmin) return;
@@ -148,6 +159,8 @@ export default function ActivitiesPage() {
           <span className="hidden sm:inline">{t('act.new')}</span>
         </button>
       </div>
+
+      <QuotaBanner />
 
       {/* Country Filters / 国家活动圈子 */}
       <div className="space-y-2">

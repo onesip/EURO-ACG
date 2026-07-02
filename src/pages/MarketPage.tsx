@@ -11,6 +11,7 @@ import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { isQuotaExceeded } from '../lib/quota';
+import QuotaBanner from '../components/QuotaBanner';
 import UserAvatar from '../components/UserAvatar';
 import { Post } from '../types';
 import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart, Pin } from 'lucide-react';
@@ -85,12 +86,23 @@ export default function MarketPage() {
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
       try {
-        const q = query(
+        let q = query(
           collection(db, 'posts'), 
           where('type', '==', 'market'),
           limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
         );
+
+        if (selectedCountry !== 'ALL') {
+          q = query(
+            collection(db, 'posts'),
+            where('type', '==', 'market'),
+            where('country', '==', selectedCountry),
+            limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
+          );
+        }
+
         const snapshot = await getDocs(q);
+        setQuotaExceeded(false); // Success! Clear quota if it was set
         
         const postsData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -108,7 +120,7 @@ export default function MarketPage() {
         setPosts(postsData);
         localStorage.setItem('cached_market_posts', JSON.stringify(postsData));
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+        if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else {
           console.error("Market posts fetch error:", error);
@@ -116,7 +128,7 @@ export default function MarketPage() {
       }
     };
     fetchData();
-  }, [user]);
+  }, [user, selectedCountry]);
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -133,6 +145,8 @@ export default function MarketPage() {
           <span className="hidden sm:inline">{t('mkt.new')}</span>
         </button>
       </div>
+
+      <QuotaBanner />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {isLoading ? (

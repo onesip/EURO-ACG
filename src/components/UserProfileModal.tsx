@@ -58,7 +58,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   const [newReview, setNewReview] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  const { user, profile: currentUserProfile } = useAuth();
+  const { user, profile: currentUserProfile, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
 
   const handleClose = () => {
@@ -105,13 +105,18 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
       try {
         const docRef = doc(db, 'users', profileUid);
         const docSnap = await getDoc(docRef);
+        setQuotaExceeded(false); // Success!
         if (docSnap.exists()) {
           setProfile(docSnap.data() as UserProfile);
         } else {
           setProfile(null);
         }
-      } catch (err) {
-        console.error('Failed to fetch public profile', err);
+      } catch (err: any) {
+        if (err?.code === 'resource-exhausted') {
+          setQuotaExceeded(true);
+        } else {
+          console.error('Failed to fetch public profile', err);
+        }
         setProfile(null);
       } finally {
         setLoading(false);
@@ -124,7 +129,10 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
     const reviewsRef = collection(db, 'users', profileUid, 'reviews');
     const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
     const unsubReviews = onSnapshot(qReviews, (snap) => {
+      setQuotaExceeded(false);
       setReviews(snap.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview));
+    }, (err) => {
+      if (err?.code === 'resource-exhausted') setQuotaExceeded(true);
     });
 
     // Check Friend Status

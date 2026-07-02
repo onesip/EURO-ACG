@@ -28,6 +28,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
       try {
         const q = query(collection(db, parentCollection, parentId, 'comments'), orderBy('createdAt', 'desc'), limit(20));
         const snapshot = await getDocs(q);
+        setQuotaExceeded(false); // Success! Clear quota
         
         const commentsData = snapshot.docs.map(doc => ({ 
           id: doc.id, 
@@ -40,7 +41,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
         setComments(commentsData);
         localStorage.setItem(`cached_comments_${parentCollection}_${parentId}`, JSON.stringify(commentsData));
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+        if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else {
           console.error("Comment fetch error:", error);

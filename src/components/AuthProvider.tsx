@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, limit, getDocs } from 'firebase/firestore';
 import { UserProfile } from '../types';
 import { isQuotaExceeded, setQuotaExceeded as setQuotaHelper } from '../lib/quota';
 
@@ -35,10 +35,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const fetchProfile = async (uid: string) => {
-    if (isQuotaExceeded()) {
-      return;
-    }
     try {
+      if (isQuotaExceeded()) {
+        throw new Error('Quota exceeded');
+      }
       const docRef = doc(db, 'users', uid);
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
@@ -62,7 +62,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         localStorage.setItem(`profile_${uid}`, JSON.stringify(newProfile));
       }
     } catch (err: any) {
-      if (err?.code === 'resource-exhausted' || err?.message?.includes('Quota limit exceeded') || err?.message?.includes('Quota exceeded')) {
+      if (err?.code === 'resource-exhausted') {
         setQuotaExceeded(true);
       } else {
         console.error("Error fetching profile:", err);
@@ -101,6 +101,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   useEffect(() => {
+    // Initial cleanup of old legacy quota flag
+    localStorage.removeItem('quotaExceeded');
+    localStorage.removeItem('quotaExceededAt');
+
+    // Probe query to clear quota flag if it was false-positively set or has reset
+    const probeQuota = async () => {
+      try {
+        const q = query(collection(db, 'posts'), limit(1));
+        await getDocs(q);
+        setQuotaExceeded(false);
+      } catch (err: any) {
+        if (err?.code === 'resource-exhausted') {
+          setQuotaExceeded(true);
+        } else {
+          // For other errors, don't set quota but also don't necessarily clear it if it was already set
+          // but if we are here and it's not resource-exhausted, we can at least say it's not a quota issue
+          // However, if it's a network error, we don't know. 
+          // But according to requirements: "只要任意一次 Firestore 读取成功，就立刻清除"
+        }
+      }
+    };
+    probeQuota();
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {

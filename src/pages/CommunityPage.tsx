@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
 import { isQuotaExceeded } from '../lib/quota';
+import QuotaBanner from '../components/QuotaBanner';
 import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
@@ -106,9 +107,23 @@ export default function CommunityPage() {
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
       try {
-        // Remove server-side orderBy to avoid index issues and handle missing createdAt
-        const q = query(collection(db, 'posts'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+        let q = query(
+          collection(db, 'posts'),
+          where('type', '==', activeTab),
+          limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
+        );
+
+        if (selectedCountry !== 'ALL') {
+          q = query(
+            collection(db, 'posts'),
+            where('type', '==', activeTab),
+            where('country', '==', selectedCountry),
+            limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
+          );
+        }
+
         const snapshot = await getDocs(q);
+        setQuotaExceeded(false); // Success! Clear quota if it was set
         
         const postsData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -128,7 +143,7 @@ export default function CommunityPage() {
         setPosts(sortedPosts);
         localStorage.setItem('cached_community_posts', JSON.stringify(sortedPosts));
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+        if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else {
           console.error("Community posts fetch error:", error);
@@ -136,7 +151,7 @@ export default function CommunityPage() {
       }
     };
     fetchData();
-  }, [user]);
+  }, [user, activeTab, selectedCountry]);
 
   const filteredPosts = posts.filter(p => {
     if (p.type !== activeTab) return false;
@@ -172,6 +187,8 @@ export default function CommunityPage() {
           <span className="hidden sm:inline">{t('com.new')}</span>
         </button>
       </div>
+
+      <QuotaBanner />
 
       {/* Country Channels / 国家频道圈子 */}
       <div className="space-y-2">

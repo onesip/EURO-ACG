@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -11,11 +11,11 @@ import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
-import CommentCount from '../components/CommentCount';
 import { ServiceAd, ServiceType } from '../types';
 import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { isQuotaExceeded } from '../lib/quota';
+import QuotaBanner from '../components/QuotaBanner';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
@@ -91,8 +91,23 @@ export default function ServicesPage() {
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
       try {
-        const q = query(collection(db, 'services'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+        let q = query(
+          collection(db, 'services'),
+          where('type', '==', activeTab),
+          limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
+        );
+
+        if (selectedCountry !== 'ALL') {
+          q = query(
+            collection(db, 'services'),
+            where('type', '==', activeTab),
+            where('country', '==', selectedCountry),
+            limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
+          );
+        }
+
         const snapshot = await getDocs(q);
+        setQuotaExceeded(false); // Success! Clear quota if it was set
         
         const adsData = snapshot.docs.map(doc => ({
           id: doc.id,
@@ -110,7 +125,7 @@ export default function ServicesPage() {
         setAds(adsData);
         localStorage.setItem('cached_services', JSON.stringify(adsData));
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted' || error?.message?.includes('Quota limit exceeded') || error?.message?.includes('Quota exceeded')) {
+        if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else {
           console.error("Services fetch error:", error);
@@ -118,7 +133,7 @@ export default function ServicesPage() {
       }
     };
     fetchData();
-  }, [user]);
+  }, [user, activeTab, selectedCountry]);
 
   const filteredAds = ads.filter(ad => {
     if (ad.type !== activeTab) return false;
@@ -141,6 +156,8 @@ export default function ServicesPage() {
           <span className="hidden sm:inline">{t('srv.new')}</span>
         </button>
       </div>
+
+      <QuotaBanner />
 
       {/* Country Filtering for Services */}
       <div className="space-y-2">
