@@ -291,6 +291,13 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                           </div>
                         )}
                       </div>
+                      
+                      {/* Gender Badge */}
+                      {!loading && currentProfile.gender && (
+                        <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-[#141416] border-2 border-indigo-500/50 rounded-full flex items-center justify-center shadow-lg z-10 animate-scaleIn">
+                          {getGenderIcon(currentProfile.gender)}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -306,11 +313,6 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                         )}>
                           {roleInfo.icon}
                           <span>{lang === 'zh' ? roleInfo.zh : roleInfo.en}</span>
-                        </div>
-                      )}
-                      {!loading && currentProfile.gender && (
-                        <div className="bg-white/5 border border-white/5 rounded-full px-2 py-1 text-sm flex items-center justify-center">
-                          {getGenderIcon(currentProfile.gender)}
                         </div>
                       )}
                     </div>
