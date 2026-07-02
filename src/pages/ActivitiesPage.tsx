@@ -50,20 +50,12 @@ export default function ActivitiesPage() {
         setActivities(JSON.parse(cached));
       } catch (_) {}
     }
-    setIsLoading(false);
+    setIsLoading(true);
 
     const fetchData = async () => {
       try {
-        let q = query(collection(db, 'activities'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+        const q = query(collection(db, 'activities'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
         
-        if (selectedCountry !== 'ALL') {
-          q = query(
-            collection(db, 'activities'),
-            where('country', '==', selectedCountry),
-            limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
-          );
-        }
-
         const snapshot = await getDocs(q);
         setQuotaExceeded(false); // Success! Clear quota if it was set
         
@@ -89,6 +81,8 @@ export default function ActivitiesPage() {
         } else {
           console.error("Activities fetch error:", error);
         }
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchData();

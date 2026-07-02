@@ -106,20 +106,10 @@ export default function CommunityPage() {
 
     const fetchData = async () => {
       try {
-        let q = query(
+        const q = query(
           collection(db, 'posts'),
-          where('type', '==', activeTab),
           limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
         );
-
-        if (selectedCountry !== 'ALL') {
-          q = query(
-            collection(db, 'posts'),
-            where('type', '==', activeTab),
-            where('country', '==', selectedCountry),
-            limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
-          );
-        }
 
         const snapshot = await getDocs(q);
         setQuotaExceeded(false); // Success! Clear quota if it was set
@@ -147,6 +137,8 @@ export default function CommunityPage() {
         } else {
           console.error("Community posts fetch error:", error);
         }
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchData();
