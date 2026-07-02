@@ -47,12 +47,32 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   const [fallback, setFallback] = useState<{ displayName?: string; photoURL?: string }>({});
   const { lang } = useLanguage();
 
+  const handleClose = () => {
+    setIsOpen(false);
+    if (window.history.state?.modal === 'profile') {
+      window.history.back();
+    }
+  };
+
   const showProfile = (uid: string, fallbackData?: { displayName?: string; photoURL?: string }) => {
     setProfileUid(uid);
     setFallback(fallbackData || {});
     setIsOpen(true);
     setProfile(null);
+    window.history.pushState({ modal: 'profile' }, '');
   };
+
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state?.modal !== 'profile') {
+        setIsOpen(false);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
 
   useEffect(() => {
     if (!profileUid) return;
@@ -115,7 +135,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
         {isOpen && currentProfile && (
           <div className="fixed inset-0 bg-[#0A0A0B]/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             {/* Backdrop click to close */}
-            <div className="absolute inset-0" onClick={() => setIsOpen(false)} />
+            <div className="absolute inset-0" onClick={handleClose} />
             
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -129,7 +149,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
               
               {/* Close Button */}
               <button 
-                onClick={() => setIsOpen(false)}
+                onClick={handleClose}
                 className="absolute top-4 right-4 p-2.5 text-slate-400 hover:text-white rounded-full bg-[#141416]/60 backdrop-blur-md border border-white/5 hover:bg-white/10 transition-all z-20"
               >
                 <X className="w-5 h-5" />
@@ -295,6 +315,17 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                 )}
               </div>
               
+              {/* Close Button at bottom */}
+              <div className="px-6 md:px-8 pb-4 pt-1 bg-[#141416] flex gap-3">
+                <button
+                  onClick={handleClose}
+                  className="w-full py-3 bg-white/5 hover:bg-white/10 active:scale-95 transition-all text-xs font-bold rounded-2xl text-slate-300 hover:text-white border border-white/5 flex items-center justify-center gap-1.5"
+                >
+                  <X className="w-4 h-4" />
+                  <span>{lang === 'zh' ? '关闭档案' : 'Close Profile'}</span>
+                </button>
+              </div>
+
               {/* Footer Stamp */}
               <div className="p-4 bg-white/[0.02] border-t border-white/5 text-center text-[10px] text-slate-500 flex items-center justify-center gap-1 font-semibold uppercase tracking-wider">
                 <Award className="w-3.5 h-3.5 text-indigo-500" />
