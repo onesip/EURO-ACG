@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -51,12 +51,11 @@ export default function CommunityPage() {
     }
     const postRef = doc(db, 'posts', postId);
     const hasLiked = currentLikes.includes(user.uid);
-    const newLikes = hasLiked
-      ? currentLikes.filter(uid => uid !== user.uid)
-      : [...currentLikes, user.uid];
     
     try {
-      await updateDoc(postRef, { likes: newLikes });
+      await updateDoc(postRef, { 
+        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
+      });
     } catch (err) {
       console.error("Failed to like post", err);
     }

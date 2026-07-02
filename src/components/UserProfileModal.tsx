@@ -5,7 +5,7 @@ import { UserProfile, UserRole } from '../types';
 import { useLanguage } from './LanguageProvider';
 import { 
   X, MapPin, Sparkles, Heart, BookOpen, Camera, Palette, 
-  Smile, Copy, Check, ExternalLink, Globe, Star, Mail, Award, Compass
+  Smile, Copy, Check, ExternalLink, Globe, Star, Mail, Award, Compass, RefreshCw
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import PostContent from './PostContent';
@@ -49,6 +49,11 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
 
   const handleClose = () => {
     setIsOpen(false);
+    // Reset profileUid so that clicking the same user again triggers useEffect
+    setTimeout(() => {
+      setProfileUid(null);
+      setProfile(null);
+    }, 300);
     if (window.history.state?.modal === 'profile') {
       window.history.back();
     }
@@ -57,8 +62,8 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   const showProfile = (uid: string, fallbackData?: { displayName?: string; photoURL?: string }) => {
     setProfileUid(uid);
     setFallback(fallbackData || {});
+    setProfile(null); // Clear previous profile immediately
     setIsOpen(true);
-    setProfile(null);
     window.history.pushState({ modal: 'profile' }, '');
   };
 
@@ -66,6 +71,8 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
     const handlePopState = (e: PopStateEvent) => {
       if (e.state?.modal !== 'profile') {
         setIsOpen(false);
+        setProfileUid(null);
+        setProfile(null);
       }
     };
     window.addEventListener('popstate', handlePopState);
@@ -162,11 +169,16 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                   <div className="relative group shrink-0">
                     <div className="absolute -inset-0.5 bg-gradient-to-tr from-pink-500 via-indigo-500 to-purple-500 rounded-full blur-sm opacity-50 group-hover:opacity-100 transition duration-500" />
                     <div className="relative w-24 h-24 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-500 p-1">
-                      <div className="w-full h-full rounded-full bg-[#141416] flex items-center justify-center font-bold text-white text-3xl overflow-hidden">
+                      <div className="w-full h-full rounded-full bg-[#141416] flex items-center justify-center font-bold text-white text-3xl overflow-hidden relative">
                         {currentProfile.photoURL ? (
                           <img src={currentProfile.photoURL} alt="Avatar" className="w-full h-full object-cover" />
                         ) : (
                           currentProfile.displayName?.charAt(0).toUpperCase() || 'U'
+                        )}
+                        {loading && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[1px]">
+                            <RefreshCw className="w-6 h-6 text-white animate-spin" />
+                          </div>
                         )}
                       </div>
                     </div>
@@ -174,7 +186,9 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
 
                   <div className="space-y-1.5 flex-1 min-w-0 w-full">
                     {/* Role Tag */}
-                    {roleInfo && (
+                    {loading ? (
+                      <div className="h-6 w-32 bg-white/5 rounded-full animate-pulse" />
+                    ) : roleInfo && (
                       <div className={cn(
                         "inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r rounded-full text-xs font-bold border",
                         roleInfo.color
@@ -185,7 +199,9 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                     )}
 
                     <h2 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight truncate">
-                      {currentProfile.displayName}
+                      {loading && !profile ? (
+                        <div className="h-8 w-48 bg-white/5 rounded-lg animate-pulse" />
+                      ) : currentProfile.displayName}
                     </h2>
                   </div>
                 </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, addDoc, serverTimestamp, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
@@ -50,12 +50,11 @@ export default function ServicesPage() {
     }
     const adRef = doc(db, 'services', adId);
     const hasSupported = currentSupports.includes(user.uid);
-    const newSupports = hasSupported
-      ? currentSupports.filter(uid => uid !== user.uid)
-      : [...currentSupports, user.uid];
-
+ 
     try {
-      await updateDoc(adRef, { supports: newSupports });
+      await updateDoc(adRef, { 
+        supports: hasSupported ? arrayRemove(user.uid) : arrayUnion(user.uid)
+      });
     } catch (err) {
       console.error("Failed to support ad", err);
     }

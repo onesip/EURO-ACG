@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette, Mail, Lock, User, RefreshCw } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { loginWithGoogle, registerWithEmail, loginWithEmail, logout } from '../lib/firebase';
@@ -242,7 +243,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Bottom Nav for Mobile */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-[#141416]/95 backdrop-blur-md border-t border-white/5 flex items-center justify-around px-2 pb-[calc(10px+env(safe-area-inset-bottom))] pt-2.5 z-50 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-[#141416]/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around px-2 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.8)] rounded-t-[1.5rem]">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
@@ -250,17 +251,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               key={item.path}
               to={item.path}
               className={cn(
-                "flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all duration-300 transform active:scale-95 relative",
+                "flex flex-col items-center gap-1.5 px-3 py-1 rounded-2xl transition-all duration-300 transform active:scale-90 relative",
                 isActive 
-                  ? "text-indigo-400 font-semibold" 
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "text-indigo-400 font-bold" 
+                  : "text-slate-500 hover:text-slate-200"
               )}
             >
               {isActive && (
-                <div className="absolute -top-1 w-8 h-1 rounded-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.8)] animate-pulse" />
+                <motion.div 
+                  layoutId="bottomNavTab"
+                  className="absolute -top-3 w-10 h-1 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,1)]" 
+                />
               )}
-              <item.icon className={cn("w-5.5 h-5.5 transition-transform", isActive ? "scale-110" : "")} />
-              <span className="text-[10px] tracking-wide mt-0.5">{item.name}</span>
+              <item.icon className={cn("w-6 h-6 transition-all", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.6)]" : "opacity-70")} />
+              <span className="text-[10px] font-bold tracking-tight mt-0.5">{item.name}</span>
             </Link>
           );
         })}
@@ -271,27 +275,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <Link
                 to="/profile"
                 className={cn(
-                  "flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl transition-all duration-300 transform active:scale-95 relative",
+                  "flex flex-col items-center gap-1.5 px-3 py-1 rounded-2xl transition-all duration-300 transform active:scale-90 relative",
                   isActive 
-                    ? "text-indigo-400 font-semibold" 
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "text-indigo-400 font-bold" 
+                    : "text-slate-500 hover:text-slate-200"
                 )}
               >
                 {isActive && (
-                  <div className="absolute -top-1 w-8 h-1 rounded-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.8)] animate-pulse" />
+                  <motion.div 
+                    layoutId="bottomNavTab"
+                    className="absolute -top-3 w-10 h-1 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,1)]" 
+                  />
                 )}
-                <UserIcon className={cn("w-5.5 h-5.5 transition-transform", isActive ? "scale-110" : "")} />
-                <span className="text-[10px] tracking-wide mt-0.5">{t('nav.profile')}</span>
+                <UserIcon className={cn("w-6 h-6 transition-all", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.6)]" : "opacity-70")} />
+                <span className="text-[10px] font-bold tracking-tight mt-0.5">{t('nav.profile')}</span>
               </Link>
             );
           })()
         ) : (
           <button
             onClick={() => setIsLoginModalOpen(true)}
-            className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-2xl text-slate-400 hover:text-slate-200 active:scale-95 transition-all"
+            className="flex flex-col items-center gap-1.5 px-3 py-1 rounded-2xl text-slate-500 hover:text-slate-200 active:scale-90 transition-all"
           >
-            <LogIn className="w-5.5 h-5.5" />
-            <span className="text-[10px] tracking-wide mt-0.5">{t('nav.login')}</span>
+            <LogIn className="w-6 h-6 opacity-70" />
+            <span className="text-[10px] font-bold tracking-tight mt-0.5">{t('nav.login')}</span>
           </button>
         )}
       </nav>
