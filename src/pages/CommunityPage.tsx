@@ -44,6 +44,24 @@ export default function CommunityPage() {
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
 
+  const handleLike = async (postId: string, currentLikes: string[] = []) => {
+    if (!user) {
+      alert(lang === 'zh' ? '请先登录以进行贴贴！' : 'Please login to like posts!');
+      return;
+    }
+    const postRef = doc(db, 'posts', postId);
+    const hasLiked = currentLikes.includes(user.uid);
+    const newLikes = hasLiked
+      ? currentLikes.filter(uid => uid !== user.uid)
+      : [...currentLikes, user.uid];
+    
+    try {
+      await updateDoc(postRef, { likes: newLikes });
+    } catch (err) {
+      console.error("Failed to like post", err);
+    }
+  };
+
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -210,8 +228,17 @@ export default function CommunityPage() {
               </div>
               <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
                 <div className="flex items-center gap-6">
-                  <button className="flex items-center gap-1.5 text-slate-400 hover:text-rose-400 transition-colors text-sm font-medium">
-                    <Heart className="w-4 h-4" /> {t('com.like')}
+                  <button 
+                    onClick={() => handleLike(post.id, post.likes)}
+                    className={cn(
+                      "flex items-center gap-1.5 transition-all text-sm font-medium duration-200",
+                      user && post.likes?.includes(user.uid) 
+                        ? "text-rose-400 hover:text-rose-500 font-semibold" 
+                        : "text-slate-400 hover:text-rose-400"
+                    )}
+                  >
+                    <Heart className={cn("w-4 h-4 transition-transform active:scale-125 duration-200", user && post.likes?.includes(user.uid) ? "fill-rose-500/80 stroke-rose-400" : "")} /> 
+                    <span>{lang === 'zh' ? '贴贴' : 'Like'} ({post.likes?.length || 0})</span>
                   </button>
                   <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
                     <MessageCircle className="w-4 h-4" /> {t('com.comment')}
@@ -343,6 +370,7 @@ function ComposeModal({ defaultType, editPost, onClose }: { defaultType: PostTyp
           authorId: user.uid,
           authorName: profile?.displayName || 'User',
           authorPhoto: profile?.photoURL || '',
+          likes: [],
           createdAt: serverTimestamp()
         });
       }

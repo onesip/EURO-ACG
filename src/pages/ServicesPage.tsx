@@ -9,7 +9,7 @@ import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import { ServiceAd, ServiceType } from '../types';
-import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2 } from 'lucide-react';
+import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 const EUROPEAN_COUNTRIES = [
@@ -42,6 +42,24 @@ export default function ServicesPage() {
   const { user, profile } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
+
+  const handleSupport = async (adId: string, currentSupports: string[] = []) => {
+    if (!user) {
+      alert(lang === 'zh' ? '请先登录以支持该服务！' : 'Please login to support this service!');
+      return;
+    }
+    const adRef = doc(db, 'services', adId);
+    const hasSupported = currentSupports.includes(user.uid);
+    const newSupports = hasSupported
+      ? currentSupports.filter(uid => uid !== user.uid)
+      : [...currentSupports, user.uid];
+
+    try {
+      await updateDoc(adRef, { supports: newSupports });
+    } catch (err) {
+      console.error("Failed to support ad", err);
+    }
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'services'), orderBy('createdAt', 'desc'));
@@ -181,6 +199,37 @@ export default function ServicesPage() {
               <div className="mb-4 mt-3">
                 <PostContent content={ad.content} />
               </div>
+
+              {/* Support & Hotness Action Bar */}
+              <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-2xl my-4">
+                <div className="flex items-center gap-2.5">
+                  <Flame className={cn(
+                    "w-5 h-5 transition-all duration-300",
+                    (ad.supports?.length || 0) > 0 ? "text-amber-500 fill-amber-500/80 animate-pulse drop-shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "text-slate-500"
+                  )} />
+                  <div className="text-xs">
+                    <p className="font-bold text-white flex items-center gap-1">
+                      {lang === 'zh' ? '人气热度' : 'Popularity'}: <span className="text-amber-400 font-extrabold font-mono">{(ad.supports?.length || 0) * 15 + 10}℃</span>
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      {ad.supports?.length || 0} {lang === 'zh' ? '人撑腰支持' : 'people supported'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleSupport(ad.id, ad.supports)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 border",
+                    user && ad.supports?.includes(user.uid)
+                      ? "bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 border-amber-600 font-extrabold"
+                      : "bg-white/5 hover:bg-white/10 text-slate-300 border-white/5"
+                  )}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>{user && ad.supports?.includes(user.uid) ? (lang === 'zh' ? '已支持' : 'Supported') : (lang === 'zh' ? '点赞支持' : 'Support')}</span>
+                </button>
+              </div>
               
               {/* Edit/Delete Actions */}
               {user && ad.authorId === user.uid && (
@@ -314,6 +363,7 @@ function ComposeModal({ defaultType, editAd, onClose }: { defaultType: ServiceTy
           authorId: user.uid,
           authorName: profile?.displayName || 'User',
           authorPhoto: profile?.photoURL || '',
+          supports: [],
           createdAt: serverTimestamp()
         });
       }

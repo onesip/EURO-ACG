@@ -51,6 +51,7 @@ export interface Post {
   country?: string;
   coverImage?: string;
   videoLink?: string;
+  likes?: string[];
 }
 
 export interface ServiceAd {
@@ -64,4 +65,5 @@ export interface ServiceAd {
   country?: string;
   coverImage?: string;
   videoLink?: string;
+  supports?: string[];
 }
