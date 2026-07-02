@@ -1,5 +1,13 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, OAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile
+} from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -19,7 +27,6 @@ export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
 export const googleProvider = new GoogleAuthProvider();
-export const appleProvider = new OAuthProvider('apple.com');
 
 export const loginWithGoogle = async () => {
   try {
@@ -30,12 +37,24 @@ export const loginWithGoogle = async () => {
   }
 };
 
-export const loginWithApple = async () => {
+export const registerWithEmail = async (email: string, pass: string, displayName: string) => {
   try {
-    return await signInWithPopup(auth, appleProvider);
+    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(userCredential.user, { displayName });
+    return userCredential.user;
   } catch (error: any) {
-    console.error("Firebase Auth Apple Error:", error);
-    alert(`Apple 登录失败 (Apple Sign-In Failed):\n${error.message}\n\n💡 提示: 请确保在 Firebase 控制台启用了 Apple 登录并正确配置了回调域名。`);
+    console.error("Firebase Auth Email Register Error:", error);
+    throw error;
+  }
+};
+
+export const loginWithEmail = async (email: string, pass: string) => {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, pass);
+    return userCredential.user;
+  } catch (error: any) {
+    console.error("Firebase Auth Email Login Error:", error);
+    throw error;
   }
 };
 

@@ -32,8 +32,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // Create empty profile
       const newProfile: UserProfile = {
         uid,
-        displayName: '',
-        photoURL: '',
+        displayName: auth.currentUser?.displayName || '',
+        photoURL: auth.currentUser?.photoURL || '',
         bio: '',
         role: 'other',
         favorites: { anime: '', characters: '', cp: '' },

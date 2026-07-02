@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette } from 'lucide-react';
+import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette, Mail, Lock, User, RefreshCw } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
-import { loginWithGoogle, loginWithApple, logout } from '../lib/firebase';
+import { loginWithGoogle, registerWithEmail, loginWithEmail, logout } from '../lib/firebase';
 import { cn } from '../lib/utils';
 import { useTheme, ACG_THEMES } from './ThemeProvider';
 
@@ -13,6 +13,58 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { t, lang, setLang } = useLanguage();
   const { activeTheme, setThemeById } = useTheme();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+  // Email login/register states
+  const [emailMode, setEmailMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayNameState, setDisplayNameState] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authLoading, setAuthLoading] = useState(false);
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+    setAuthLoading(true);
+    
+    if (!email || !password) {
+      setAuthError(lang === 'zh' ? '请填写所有必填字段' : 'Please fill in all fields');
+      setAuthLoading(false);
+      return;
+    }
+    
+    try {
+      if (emailMode === 'register') {
+        if (!displayNameState) {
+          setAuthError(lang === 'zh' ? '请填写昵称' : 'Please fill in a display name');
+          setAuthLoading(false);
+          return;
+        }
+        await registerWithEmail(email, password, displayNameState);
+      } else {
+        await loginWithEmail(email, password);
+      }
+      setIsLoginModalOpen(false);
+      setEmail('');
+      setPassword('');
+      setDisplayNameState('');
+    } catch (err: any) {
+      console.error(err);
+      let errMsg = err.message;
+      if (err.code === 'auth/email-already-in-use') {
+        errMsg = lang === 'zh' ? '该邮箱已被注册' : 'Email already in use';
+      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        errMsg = lang === 'zh' ? '邮箱或密码错误' : 'Incorrect email or password';
+      } else if (err.code === 'auth/invalid-email') {
+        errMsg = lang === 'zh' ? '无效的邮箱格式' : 'Invalid email format';
+      } else if (err.code === 'auth/weak-password') {
+        errMsg = lang === 'zh' ? '密码强度不足（至少6位）' : 'Password too weak (at least 6 chars)';
+      }
+      setAuthError(errMsg);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
 
   const navItems = [
     { name: t('nav.activities'), path: '/', icon: Calendar },
@@ -210,28 +262,32 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Auth Choice Modal */}
       {isLoginModalOpen && (
-        <div className="fixed inset-0 bg-[#000000]/80 backdrop-blur-md flex items-center justify-center p-4 z-[999] animate-fadeIn">
-          <div className="relative w-full max-w-sm bg-[#141416] border border-white/5 rounded-3xl p-6 md:p-8 shadow-2xl overflow-hidden">
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 z-[999] animate-fadeIn overflow-y-auto">
+          <div className="relative w-full max-w-sm bg-[#141416] border border-white/5 rounded-3xl p-5 md:p-6 shadow-2xl overflow-hidden my-auto">
             {/* Background pattern */}
             <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
             
-            <div className="flex justify-between items-center mb-6 relative z-10">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
-                <h3 className="text-lg font-bold text-white">
-                  {lang === 'zh' ? '登录/签到 EUROACG' : 'Sign in to EUROACG'}
+            <div className="flex justify-between items-center mb-5 relative z-10">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
+                <h3 className="text-base font-bold text-white">
+                  {lang === 'zh' ? '开启你的 ACG 之旅' : 'Join EUROACG Hub'}
                 </h3>
               </div>
               <button 
-                onClick={() => setIsLoginModalOpen(false)}
+                onClick={() => {
+                  setIsLoginModalOpen(false);
+                  setAuthError('');
+                }}
                 className="p-1.5 rounded-full hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex flex-col items-center text-center space-y-4 mb-6 relative z-10">
-              <div className="w-20 h-20 rounded-2xl bg-indigo-500/5 border border-white/5 p-1 overflow-hidden">
+            {/* Logo area */}
+            <div className="flex flex-col items-center text-center space-y-3 mb-5 relative z-10">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-500/5 border border-white/5 p-0.5 overflow-hidden shadow-lg">
                 <img 
                   src="/logo.jpg" 
                   alt="EUROACG Logo" 
@@ -240,24 +296,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 />
               </div>
               <div>
-                <h4 className="font-bold text-white text-base">EUROACG</h4>
-                <p className="text-xs text-slate-400 mt-1">
-                  {lang === 'zh' ? '欧洲有爱的 ACG 同好集结地' : 'The premier European ACG Hub'}
+                <h4 className="font-bold text-white text-sm">EUROACG</h4>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {lang === 'zh' ? '欧洲首个二次元同好集结地' : 'The premier European ACG Hub'}
                 </p>
               </div>
             </div>
 
-            {/* Login Providers */}
-            <div className="space-y-3 relative z-10">
+            {authError && (
+              <div className="mb-4 p-2.5 bg-rose-500/10 border border-rose-500/20 rounded-xl text-center">
+                <p className="text-[11px] text-rose-400 font-medium leading-relaxed">{authError}</p>
+              </div>
+            )}
+
+            {/* Google Authentication Section */}
+            <div className="space-y-3 relative z-10 mb-4 animate-fadeIn">
               <button
+                type="button"
+                disabled={authLoading}
                 onClick={async () => {
                   const res = await loginWithGoogle();
                   if (res) setIsLoginModalOpen(false);
                 }}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-100 text-slate-900 rounded-xl font-semibold transition-colors shadow-md"
+                className="w-full flex items-center justify-center gap-2.5 py-3 px-4 bg-white hover:bg-slate-100 text-slate-900 rounded-2xl font-semibold text-xs transition-all active:scale-[0.98] shadow-md"
               >
-                {/* Custom Google Icon SVG */}
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
                   <path
                     fill="#4285F4"
                     d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -275,43 +338,116 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                   />
                 </svg>
-                <span className="text-slate-900">Google 谷歌账号登录</span>
-              </button>
-
-              <button
-                onClick={async () => {
-                  const res = await loginWithApple();
-                  if (res) setIsLoginModalOpen(false);
-                }}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black hover:bg-slate-900 text-white rounded-xl font-semibold transition-colors shadow-md border border-white/10"
-              >
-                {/* Custom Apple Icon SVG */}
-                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
-                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.17c.66-.81 1.11-1.93.99-3.06-1 .04-2.22.67-2.94 1.51-.64.73-1.2 1.87-1.05 2.98 1.12.09 2.27-.58 2.94-1.43z" />
-                </svg>
-                <span>Apple 苹果账号登录</span>
+                <span className="font-bold">{lang === 'zh' ? 'Google 谷歌极速登录' : 'Sign in with Google'}</span>
               </button>
             </div>
 
+            {/* Elegant Divider */}
+            <div className="relative flex py-2 items-center z-10 mb-3.5">
+              <div className="flex-grow border-t border-white/5"></div>
+              <span className="flex-shrink mx-3 text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                {lang === 'zh' ? '或使用邮箱登录' : 'Or via Email'}
+              </span>
+              <div className="flex-grow border-t border-white/5"></div>
+            </div>
+
+            {/* EMAIL SIGN IN & SIGN UP FORM */}
+            <form onSubmit={handleEmailAuth} className="space-y-3.5 relative z-10 animate-fadeIn">
+              {emailMode === 'register' && (
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '昵称 / 角色名' : 'Nickname'}</label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input
+                      type="text"
+                      required
+                      value={displayNameState}
+                      onChange={(e) => setDisplayNameState(e.target.value)}
+                      placeholder={lang === 'zh' ? '你的 ACG 专属昵称' : 'Your display name'}
+                      className="w-full pl-10 pr-4 py-2.5 bg-[#0A0A0B] border border-white/5 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '电子邮箱' : 'Email Address'}</label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="user@example.com"
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#0A0A0B] border border-white/5 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{lang === 'zh' ? '设置密码' : 'Password'}</label>
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#0A0A0B] border border-white/5 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={authLoading}
+                className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 text-white rounded-xl font-bold text-xs transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-2"
+              >
+                {authLoading && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>
+                  {emailMode === 'register' 
+                    ? (lang === 'zh' ? '立即创建账号' : 'Create Account') 
+                    : (lang === 'zh' ? '安全登录' : 'Sign In Safely')}
+                </span>
+              </button>
+
+              <div className="text-center pt-1.5 border-t border-white/5 mt-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailMode(emailMode === 'login' ? 'register' : 'login');
+                    setAuthError('');
+                  }}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium transition-colors"
+                >
+                  {emailMode === 'login' 
+                    ? (lang === 'zh' ? '还没有账号？点击这里注册' : 'No account? Sign up here') 
+                    : (lang === 'zh' ? '已有账号？点击立即登录' : 'Already have an account? Sign in')}
+                </button>
+              </div>
+            </form>
+
             {/* Diagnostic troubleshooting tips */}
-            <div className="mt-6 border-t border-white/5 pt-4 text-left relative z-10">
+            <div className="mt-4 border-t border-white/5 pt-3.5 text-left relative z-10">
               <details className="group cursor-pointer">
-                <summary className="flex items-center justify-between text-xs text-slate-400 hover:text-white transition-colors font-medium">
-                  <span>⚙️ 部署排查与闪退提示</span>
+                <summary className="flex items-center justify-between text-[10px] text-slate-500 hover:text-slate-300 transition-colors font-semibold uppercase tracking-wider">
+                  <span>⚙️ 部署排查与安全域名提示</span>
                   <span className="transition-transform group-open:rotate-180">▼</span>
                 </summary>
-                <div className="mt-2 p-3 bg-slate-900/60 rounded-xl border border-white/5 text-[11px] text-slate-400 leading-relaxed space-y-2">
+                <div className="mt-2 p-2.5 bg-slate-900/60 rounded-xl border border-white/5 text-[10px] text-slate-400 leading-relaxed space-y-1.5">
                   <p>
-                    如果您将应用发布到了 <strong>Vercel 或自定义域名</strong>，在按下登录时遇到闪退或无反应，这是由于 Firebase 的安全域名策略。请按照以下步骤配置：
+                    如果您将应用发布到了 <strong>Vercel 或自定义域名</strong>，在按下 Google 登录时若遇到闪退，这是由于 Firebase 的安全授权限制。请按照以下步骤配置：
                   </p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    <li>登录你的 <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline font-medium">Firebase 控制台</a>。</li>
-                    <li>进入项目，前往 <strong>Authentication (身份验证)</strong> &gt; <strong>Settings (设置)</strong> &gt; <strong>Authorized domains (授权网域)</strong>。</li>
-                    <li>点击 “添加网域”，将您的 Vercel 域名 (例如 <code>euroacg.vercel.app</code>) 添加进去即可立即修复！</li>
+                  <ol className="list-decimal list-inside space-y-1 text-slate-400">
+                    <li>登录你的 <a href="https://console.firebase.google.com" target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline font-medium">Firebase 控制台</a></li>
+                    <li>前往 <strong>Authentication</strong> &gt; <strong>Settings</strong> &gt; <strong>Authorized domains</strong></li>
+                    <li>添加您的 Vercel 域名（例如 <code>euro-acg.vercel.app</code>）即可一秒完美登录！</li>
                   </ol>
-                  <p className="text-indigo-400/80">
-                    *注：在内嵌 iframe (例如 AI Studio 的预览窗) 中可能受浏览器第三方 Cookie 拦截，请在独立的新标签页中打开项目以确保 Google / Apple 正常唤起。
-                  </p>
                 </div>
               </details>
             </div>

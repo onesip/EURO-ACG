@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { db } from '../lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { UserRole } from '../types';
 import { Save, LogIn, Sparkles, MapPin, Palette } from 'lucide-react';
 import { loginWithGoogle } from '../lib/firebase';
@@ -148,7 +148,7 @@ export default function ProfilePage() {
     setIsSaving(true);
     try {
       const docRef = doc(db, 'users', user.uid);
-      await updateDoc(docRef, { ...formData, updatedAt: Date.now() });
+      await setDoc(docRef, { ...formData, updatedAt: Date.now() }, { merge: true });
       await refreshProfile();
       alert('本命档案更新成功！Profile updated successfully!');
     } catch (error) {
