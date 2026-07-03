@@ -54,12 +54,12 @@ export default function QuotaBanner() {
         </div>
         <div className="flex-1">
           <h3 className="text-rose-400 font-bold">
-            {lang === 'zh' ? '数据库访问额度已用完' : 'Database Quota Exceeded'}
+            {lang === 'zh' ? '访问暂时受限' : 'Access Temporarily Restricted'}
           </h3>
           <p className="text-sm text-slate-400 mt-1">
             {lang === 'zh' 
-              ? '由于今日访问量过大，Firebase 免费额度已耗尽。系统已进入 5 分钟自动保护模式以减少请求。如果点击重试后依然出现此提示，说明额度尚未重置（通常在太平洋时间凌晨重置）。' 
-              : 'Firebase free quota has been exhausted due to high traffic today. 5-minute protection mode enabled. If this persists after retry, the quota has not reset yet (usually resets at midnight PT).'}
+              ? '由于今日请求过于频繁或系统触发流量保护，您的访问暂时受限。系统已开启自动保护模式以减少请求。若您已登录，可尝试点击下方重试按钮恢复连接。' 
+              : 'Access is temporarily restricted due to high traffic or system protection. Dynamic protection mode is active to reduce requests. If you are logged in, you can try retrying below to restore connection.'}
           </p>
           <div className="flex flex-wrap gap-3 mt-4">
             <button

@@ -112,15 +112,15 @@ export default function ServicesPage() {
   };
 
   useEffect(() => {
-    const cacheKey = `cached_services_${activeTab}_${selectedCountry}`;
-    const cached = loadFromCache<ServiceAd[]>(cacheKey);
-    if (cached) {
-      setAds(cached);
-      setIsLoading(false);
-    } else {
-      setIsLoading(true);
-    }
     setIndexRequired(false);
+
+    if (!user) {
+      setAds([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
 
     const fetchData = async () => {
       try {
@@ -133,7 +133,7 @@ export default function ServicesPage() {
         }
 
         constraints.push(orderBy('createdAt', 'desc'));
-        constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+        constraints.push(limit(USER_LIST_LIMIT));
 
         const q = query(
           collection(db, 'services'),
@@ -155,7 +155,6 @@ export default function ServicesPage() {
           return 0; // maintain Firestore orderBy order otherwise
         });
         setAds(adsData);
-        saveToCache(cacheKey, adsData);
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);
@@ -180,16 +179,37 @@ export default function ServicesPage() {
           <h1 className="text-3xl font-bold tracking-tight text-white">{t('srv.title')}</h1>
           <p className="text-slate-400 mt-1">{t('srv.subtitle')}</p>
         </div>
-        <button
-          onClick={() => setIsComposeOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium shadow-sm"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="hidden sm:inline">{t('srv.new')}</span>
-        </button>
+        {user && (
+          <button
+            onClick={() => setIsComposeOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium shadow-sm"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">{t('srv.new')}</span>
+          </button>
+        )}
       </div>
 
-      {indexRequired && (
+      {!user ? (
+        <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-3xl p-8 text-center max-w-2xl mx-auto my-12 shadow-2xl">
+          <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Sparkles className="w-8 h-8 text-indigo-400 animate-pulse" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-4">
+            {lang === 'zh' ? '🌍 圈子限速保护模式' : '🌍 Circle Protection Mode'}
+          </h2>
+          <p className="text-slate-300 leading-relaxed mb-6">
+            {lang === 'zh' 
+              ? 'EuroACG 小破站正在限流中。登录后可以查看内容、发帖和找同城搭子。现在也可以先在小红书评论区登记：城市 + 想找什么。' 
+              : 'EuroACG is currently in traffic-saving mode. Log in to view posts, join discussions, and find local ACG friends.'}
+          </p>
+          <div className="text-xs text-slate-500 font-mono">
+            {lang === 'zh' ? '未登录游客暂不可读取实时数据库' : 'Guest access restricted to 0 database reads'}
+          </div>
+        </div>
+      ) : (
+        <>
+          {indexRequired && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-400 flex items-center gap-3">
           <AlertCircle className="w-5 h-5 shrink-0" />
           <p className="text-sm">
@@ -460,12 +480,7 @@ export default function ServicesPage() {
         )}
       </div>
 
-      {!user && ads.length >= GUEST_LIST_LIMIT && (
-        <div className="text-center py-6 mt-4 border-t border-white/5">
-          <p className="text-sm text-slate-400">
-            {lang === 'zh' ? '登录后查看更多内容，并加入欧洲二次元同好社区。' : 'Log in to explore more posts and connect with the Euro ACG community.'}
-          </p>
-        </div>
+        </>
       )}
 
       {(isComposeOpen || editingAd) && (

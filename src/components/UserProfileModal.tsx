@@ -103,6 +103,14 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   useEffect(() => {
     if (!profileUid) return;
 
+    if (!user) {
+      setLoading(false);
+      setProfile(null);
+      setReviews([]);
+      setFriendStatus('none');
+      return;
+    }
+
     const profileCacheKey = `cached_user_profile_${profileUid}`;
     const reviewsCacheKey = `cached_user_reviews_${profileUid}`;
     
@@ -323,7 +331,25 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="p-6 md:p-8 pt-16 relative flex-1 overflow-y-auto scrollbar-none space-y-6">
+              {!user ? (
+                <div className="p-8 text-center space-y-6 pt-16 flex-1 overflow-y-auto">
+                  <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Sparkles className="w-8 h-8 text-indigo-400 animate-pulse" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white">
+                    {lang === 'zh' ? '🌍 圈子限速保护模式' : '🌍 Circle Protection Mode'}
+                  </h2>
+                  <p className="text-slate-300 text-sm leading-relaxed">
+                    {lang === 'zh' 
+                      ? 'EuroACG 小破站正在限流中。登录后可以查看内容、发帖和找同城搭子。现在也可以先在小红书评论区登记：城市 + 想找什么。' 
+                      : 'EuroACG is currently in traffic-saving mode. Log in to view posts, join discussions, and find local ACG friends.'}
+                  </p>
+                  <div className="text-xs text-slate-500 font-mono">
+                    {lang === 'zh' ? '未登录游客暂不可读取实时数据库' : 'Guest access restricted to 0 database reads'}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6 md:p-8 pt-16 relative flex-1 overflow-y-auto scrollbar-none space-y-6">
                 {/* User Identity Section */}
                 <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 text-center sm:text-left">
                   {/* Glowing Avatar */}
@@ -598,9 +624,8 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                     </div>
                   </div>
                 )}
-              </div>
-              
-              {/* Close Button at bottom */}
+                </div>
+              )}
               <div className="px-6 md:px-8 pb-4 pt-1 bg-[#141416] flex gap-3">
                 <button
                   onClick={handleClose}

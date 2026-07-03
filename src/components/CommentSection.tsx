@@ -17,6 +17,11 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
   const { showProfile } = useUserProfileModal();
 
   useEffect(() => {
+    if (!user) {
+      setComments([]);
+      return;
+    }
+
     const cacheKey = `cached_comments_${parentCollection}_${parentId}`;
     const cached = loadFromCache<any[]>(cacheKey);
     if (cached) {

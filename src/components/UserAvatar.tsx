@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { Gender } from '../types';
 import { cn } from '../lib/utils';
 
@@ -23,7 +23,7 @@ export default function UserAvatar({ uid, photoURL, displayName, className, size
   const [gender, setGender] = useState<Gender | undefined>();
 
   useEffect(() => {
-    if (!showGender || !uid) return;
+    if (!showGender || !uid || !auth.currentUser) return;
     
     const fetchGender = async () => {
       try {
