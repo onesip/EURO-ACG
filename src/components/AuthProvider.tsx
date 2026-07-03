@@ -123,39 +123,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     let isMounted = true;
 
-    const initAuth = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result && isMounted) {
-          console.log("Successfully logged in via redirect:", result.user.email);
-        }
-      } catch (err: any) {
-        console.error("Redirect Login Error:", err);
-        if (err.code && err.code !== 'auth/no-current-user' && isMounted) {
-          alert(`登录重定向出错 (Redirect Error): ${err.message}\n\n💡 建议: 请确保您的域名已在 Firebase 控制台授权，并尝试在纯净浏览器环境(非微信内部)打开。`);
-        }
+    // 0. Check storage availability
+    try {
+      const testKey = '__test_storage__';
+      localStorage.setItem(testKey, '1');
+      localStorage.removeItem(testKey);
+    } catch (e) {
+      console.warn("Storage is blocked, auth might fail.");
+      if (isMounted) {
+        alert("⚠️ 浏览器安全限制提示:\n您的浏览器禁用了本地存储或 Cookie。这会阻止 Google 登录后的状态同步。\n\n💡 建议: 请尝试在系统自带浏览器(如 Safari/Chrome)中打开，并关闭「阻止所有 Cookie」选项。");
       }
+    }
 
-      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        if (!isMounted) return;
-        
-        setUser(currentUser);
-        if (currentUser) {
-          await fetchProfile(currentUser.uid);
-        } else {
-          setProfile(null);
-        }
-        setLoading(false);
-      });
+    // 1. Register auth state observer IMMEDIATELY
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!isMounted) return;
+      
+      console.log("Auth State Changed:", currentUser?.email || "Guest");
+      setUser(currentUser);
+      if (currentUser) {
+        await fetchProfile(currentUser.uid);
+      } else {
+        setProfile(null);
+      }
+      setLoading(false);
+    });
 
-      return unsubscribe;
-    };
-
-    const unsubscribePromise = initAuth();
+    // 2. Handle redirect result in parallel
+    getRedirectResult(auth).then((result) => {
+      if (result && isMounted) {
+        console.log("Redirect login success:", result.user.email);
+      }
+    }).catch((err: any) => {
+      console.error("Redirect Login Error:", err);
+      if (err.code && err.code !== 'auth/no-current-user' && isMounted) {
+        alert(`登录重定向出错 (Redirect Error): ${err.message}\n\n💡 建议: 请确保您的域名已在 Firebase 控制台授权，并尝试在纯净浏览器环境(非微信内部)打开。`);
+      }
+    });
 
     return () => {
       isMounted = false;
-      unsubscribePromise.then(unsubscribe => unsubscribe && unsubscribe());
+      unsubscribe();
     };
   }, []);
 

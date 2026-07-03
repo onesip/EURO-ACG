@@ -8,7 +8,9 @@ import {
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
@@ -25,21 +27,24 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch(err => console.error("Persistence error:", err));
 
 // Use the exact databaseId from firebase-applet-config.json
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 
-// App Check Initialization
-// WARNING: Replace 'YOUR_RECAPTCHA_V3_SITE_KEY' with your actual reCAPTCHA v3 site key from Google Cloud Console.
+// App Check Initialization - Only if site key is provided
 export let appCheck: any = null;
 if (typeof window !== 'undefined') {
-  try {
-    appCheck = initializeAppCheck(app, {
-      provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'),
-      isTokenAutoRefreshEnabled: true // Enable auto-refresh.
-    });
-  } catch (e) {
-    console.warn("App Check initialization failed:", e);
+  const siteKey = 'YOUR_RECAPTCHA_V3_SITE_KEY';
+  if (siteKey && siteKey !== 'YOUR_RECAPTCHA_V3_SITE_KEY') {
+    try {
+      appCheck = initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(siteKey),
+        isTokenAutoRefreshEnabled: true
+      });
+    } catch (e) {
+      console.warn("App Check initialization failed:", e);
+    }
   }
 }
 
