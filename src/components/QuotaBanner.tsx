@@ -38,7 +38,7 @@ export default function QuotaBanner() {
     } catch (err: any) {
       console.error("Retry probe failed:", err.code);
       if (err?.code === 'resource-exhausted') {
-        setRetryError(lang === 'zh' ? '额度尚未恢复，请稍后再试（通常在太平洋时间凌晨重置）。' : 'Quota not reset yet. Usually resets at midnight PT.');
+        setRetryError(lang === 'zh' ? '数据库尚未完成升级同步，请再等待几分钟后重试。' : 'Database upgrade sync not yet completed, please try again in a few minutes.');
       } else {
         setRetryError(lang === 'zh' ? '连接尝试失败，请检查网络或稍后刷新。' : 'Connection failed. Please check your network or refresh later.');
       }
@@ -58,8 +58,8 @@ export default function QuotaBanner() {
           </h3>
           <p className="text-sm text-slate-400 mt-1">
             {lang === 'zh' 
-              ? '由于今日请求过于频繁或系统触发流量保护，您的访问暂时受限。系统已开启自动保护模式以减少请求。若您已登录，可尝试点击下方重试按钮恢复连接。' 
-              : 'Access is temporarily restricted due to high traffic or system protection. Dynamic protection mode is active to reduce requests. If you are logged in, you can try retrying below to restore connection.'}
+              ? '您的访问暂时受限。如果您刚刚升级了 Blaze 计划，Google 服务器通常需要 5-15 分钟来同步账单状态到数据库，请耐心等待。系统已开启深度缓存模式，大幅降低您的云端花费，帮您省钱！' 
+              : 'Access is temporarily restricted. If you just upgraded to the Blaze plan, please wait 5-15 minutes for Google servers to sync your billing status. Aggressive caching is enabled to minimize your costs!'}
           </p>
           <div className="flex flex-wrap gap-3 mt-4">
             <button
