@@ -23,9 +23,9 @@ async function startServer() {
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      console.log(`Starting upload for file: ${req.file.originalname} (${req.file.size} bytes)`);
+      console.log(`[Server] Uploading: ${req.file.originalname} (${req.file.size} bytes)`);
 
-      // Attempt 1: PngLog
+      // 1. PngLog
       try {
         const formData = new FormData();
         const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
@@ -41,17 +41,15 @@ async function startServer() {
         });
 
         const data = await response.json();
-        
         if (data.status && data.data?.links?.url) {
-          console.log("Upload success (PngLog):", data.data.links.url);
+          console.log("[Server] PngLog Success:", data.data.links.url);
           return res.json({ url: data.data.links.url });
         }
-        console.warn("PngLog failed, trying fallback provider...");
       } catch (e: any) {
-        console.warn("PngLog error:", e.message);
+        console.warn("[Server] PngLog Error:", e.message);
       }
 
-      // Attempt 2: Catbox.moe (Alternative robust provider)
+      // 2. Catbox
       try {
         const catboxFormData = new FormData();
         catboxFormData.append("reqtype", "fileupload");
@@ -66,19 +64,18 @@ async function startServer() {
         if (catboxRes.ok) {
           const url = await catboxRes.text();
           if (url && url.startsWith("http")) {
-            console.log("Upload success (Catbox):", url);
+            console.log("[Server] Catbox Success:", url);
             return res.json({ url });
           }
         }
-        console.warn("Catbox fallback failed.");
       } catch (e: any) {
-        console.warn("Catbox fallback error:", e.message);
+        console.warn("[Server] Catbox Error:", e.message);
       }
 
-      throw new Error("所有图床服务均上传失败 (All upload providers failed)。请尝试缩小图片大小或更换图片格式（建议使用 JPG/PNG 并保持在 2MB 以内）。");
+      throw new Error("所有上传服务均不可用 (All upload services failed).");
     } catch (error: any) {
-      console.error("Server upload final error:", error);
-      res.status(500).json({ error: error.message || "Failed to upload image" });
+      console.error("[Server] Final Upload Error:", error);
+      res.status(500).json({ error: error.message || "Upload failed" });
     }
   });
 
