@@ -60,6 +60,26 @@
         "update": "request.auth != null && resource.data.authorId == request.auth.uid",
         "delete": "request.auth != null && resource.data.authorId == request.auth.uid"
       }
+    },
+    {
+      "name": "chats",
+      "description": "二次元 Live Chatroom Messages",
+      "fields": [
+        { "name": "channelId", "type": "string" },
+        { "name": "senderId", "type": "string" },
+        { "name": "senderName", "type": "string" },
+        { "name": "senderPhoto", "type": "string" },
+        { "name": "senderRole", "type": "string" },
+        { "name": "content", "type": "string" },
+        { "name": "createdAt", "type": "timestamp" },
+        { "name": "timestamp", "type": "number" },
+        { "name": "type", "type": "string" },
+        { "name": "actionType", "type": "string" }
+      ],
+      "security_rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null && request.resource.data.senderId == request.auth.uid"
+      }
     }
   ]
 }
