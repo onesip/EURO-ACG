@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
+import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, REVIEW_PAGE_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
 import { doc, getDoc, collection, query, where, addDoc, serverTimestamp, deleteDoc, updateDoc, setDoc, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { UserProfile, UserRole, Gender, UserReview, FriendRequest } from '../types';
@@ -103,7 +103,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   useEffect(() => {
     if (!profileUid) return;
 
-    if (!user) {
+    if (!user && EMERGENCY_GUEST_FIRESTORE_OFF) {
       setLoading(false);
       setProfile(null);
       setReviews([]);
@@ -111,25 +111,9 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
       return;
     }
 
-    const profileCacheKey = `cached_user_profile_${profileUid}`;
-    const reviewsCacheKey = `cached_user_reviews_${profileUid}`;
-    
-    const cachedProfile = loadFromCache<UserProfile>(profileCacheKey);
-    const cachedReviews = loadFromCache<UserReview[]>(reviewsCacheKey);
-    
-    if (cachedProfile) {
-      setProfile(cachedProfile);
-      setLoading(false);
-    } else {
-      setLoading(true);
-    }
-
-    if (cachedReviews) {
-      setReviews(cachedReviews);
-    }
+    setLoading(true);
 
     const fetchProfileData = async () => {
-      if (cachedProfile) return; // Skip network fetch if we have cache
       try {
         const docRef = doc(db, 'users', profileUid);
         const docSnap = await getDoc(docRef);
@@ -137,7 +121,6 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
         if (docSnap.exists()) {
           const uProfile = docSnap.data() as UserProfile;
           setProfile(uProfile);
-          saveToCache(profileCacheKey, uProfile, 300000); // Cache for 5 mins
         } else {
           setProfile(null);
         }
@@ -147,9 +130,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
         } else {
           console.error('Failed to fetch public profile', err);
         }
-        if (!cachedProfile) {
-          setProfile(null);
-        }
+        setProfile(null);
       } finally {
         setLoading(false);
       }
@@ -157,15 +138,12 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
 
     const fetchReviewsAndFriends = async () => {
       try {
-        // Fetch Reviews only if not cached
-        if (!cachedReviews) {
-          const reviewsRef = collection(db, 'users', profileUid, 'reviews');
-          const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(20));
-          const snapReviews = await getDocs(qReviews);
-          const reviewsData = snapReviews.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview);
-          setReviews(reviewsData);
-          saveToCache(reviewsCacheKey, reviewsData, 300000); // Cache for 5 mins
-        }
+        // Fetch Reviews
+        const reviewsRef = collection(db, 'users', profileUid, 'reviews');
+        const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(REVIEW_PAGE_LIMIT));
+        const snapReviews = await getDocs(qReviews);
+        const reviewsData = snapReviews.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview);
+        setReviews(reviewsData);
 
         // Check Friend Status (getDocs with limit 1 instead of onSnapshot)
         if (user && user.uid !== profileUid) {
@@ -334,7 +312,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                 <X className="w-5 h-5" />
               </button>
 
-              {!user ? (
+              {!user && EMERGENCY_GUEST_FIRESTORE_OFF ? (
                 <div className="p-8 text-center space-y-6 pt-16 flex-1 overflow-y-auto">
                   <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Sparkles className="w-8 h-8 text-indigo-400 animate-pulse" />

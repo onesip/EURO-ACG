@@ -9,6 +9,7 @@ import {
   updateProfile
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 
 const firebaseConfig = {
   projectId: "gen-lang-client-0601780209",
@@ -25,6 +26,20 @@ export const auth = getAuth(app);
 
 // Use the exact databaseId from firebase-applet-config.json
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// App Check Initialization
+// WARNING: Replace 'YOUR_RECAPTCHA_V3_SITE_KEY' with your actual reCAPTCHA v3 site key from Google Cloud Console.
+export let appCheck: any = null;
+if (typeof window !== 'undefined') {
+  try {
+    appCheck = initializeAppCheck(app, {
+      provider: new ReCaptchaV3Provider('YOUR_RECAPTCHA_V3_SITE_KEY'),
+      isTokenAutoRefreshEnabled: true // Enable auto-refresh.
+    });
+  } catch (e) {
+    console.warn("App Check initialization failed:", e);
+  }
+}
 
 export const googleProvider = new GoogleAuthProvider();
 

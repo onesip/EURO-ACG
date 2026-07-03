@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
+import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
 import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -114,24 +114,16 @@ export default function ServicesPage() {
   useEffect(() => {
     setIndexRequired(false);
 
-    if (!user) {
-      setAds([]);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
 
     const fetchData = async () => {
-      try {
-        const cacheKey = `cached_services_${activeTab}_${selectedCountry}`;
-        const cached = loadFromCache<ServiceAd[]>(cacheKey);
-        if (cached) {
-          setAds(cached);
-          setIsLoading(false);
-          return;
-        }
+      if (!user && EMERGENCY_GUEST_FIRESTORE_OFF) {
+        setAds([]);
+        setIsLoading(false);
+        return;
+      }
 
+      try {
         const constraints: any[] = [
           where('type', '==', activeTab)
         ];
@@ -141,7 +133,7 @@ export default function ServicesPage() {
         }
 
         constraints.push(orderBy('createdAt', 'desc'));
-        constraints.push(limit(USER_LIST_LIMIT));
+        constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
 
         const q = query(
           collection(db, 'services'),
@@ -163,7 +155,6 @@ export default function ServicesPage() {
           return 0; // maintain Firestore orderBy order otherwise
         });
         setAds(adsData);
-        saveToCache(cacheKey, adsData, 180000); // 3 minutes TTL
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);
@@ -199,7 +190,7 @@ export default function ServicesPage() {
         )}
       </div>
 
-      {!user ? (
+      {!user && EMERGENCY_GUEST_FIRESTORE_OFF ? (
         <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-3xl p-8 text-center max-w-2xl mx-auto my-12 shadow-2xl">
           <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
             <Sparkles className="w-8 h-8 text-indigo-400 animate-pulse" />

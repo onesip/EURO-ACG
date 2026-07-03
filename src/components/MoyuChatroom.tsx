@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
@@ -106,43 +106,57 @@ export default function MoyuChatroom() {
           return;
         }
 
-        // Fetch user profiles for each friend
-        const fetchedFriends = await Promise.all(
-          friendIds.map(async (friendUid) => {
-            const cachedProfile = loadFromCache<UserProfile>(`cached_user_profile_${friendUid}`);
+        // Fetch user profiles for each friend in chunks of 10 to avoid N+1 queries
+        const chunks = [];
+        for (let i = 0; i < friendIds.length; i += 10) {
+          chunks.push(friendIds.slice(i, i + 10));
+        }
+
+        const fetchedFriendsMap = new Map();
+        
+        for (const chunk of chunks) {
+          const uncachedIds = [];
+          for (const fid of chunk) {
+            const cachedProfile = loadFromCache<UserProfile>(`cached_user_profile_${fid}`);
             if (cachedProfile) {
-              return {
-                uid: friendUid,
+              fetchedFriendsMap.set(fid, {
+                uid: fid,
                 displayName: cachedProfile.displayName || 'Moyu Friend',
                 photoURL: cachedProfile.photoURL || '',
                 role: cachedProfile.role || 'other'
-              };
+              });
+            } else {
+              uncachedIds.push(fid);
             }
+          }
 
+          if (uncachedIds.length > 0) {
             try {
-              const uSnap = await getDoc(doc(db, 'users', friendUid));
-              if (uSnap.exists()) {
-                const uData = uSnap.data() as UserProfile;
-                saveToCache(`cached_user_profile_${friendUid}`, uData, 300000);
-                return {
-                  uid: friendUid,
+              const usersRef = collection(db, 'users');
+              const q = query(usersRef, where('uid', 'in', uncachedIds));
+              const snap = await getDocs(q);
+              snap.forEach(docSnap => {
+                const uData = docSnap.data() as UserProfile;
+                saveToCache(`cached_user_profile_${uData.uid}`, uData, 300000);
+                fetchedFriendsMap.set(uData.uid, {
+                  uid: uData.uid,
                   displayName: uData.displayName || 'Moyu Friend',
                   photoURL: uData.photoURL || '',
                   role: uData.role || 'other'
-                };
-              }
+                });
+              });
             } catch (err) {
-              console.error(`Error loading profile for ${friendUid}:`, err);
+              console.error(`Error loading profiles for chunk:`, err);
             }
+          }
+        }
 
-            return {
-              uid: friendUid,
-              displayName: 'Moyu Member',
-              photoURL: '',
-              role: 'other'
-            };
-          })
-        );
+        const fetchedFriends = friendIds.map(fid => fetchedFriendsMap.get(fid) || {
+          uid: fid,
+          displayName: 'Moyu Member',
+          photoURL: '',
+          role: 'other'
+        });
 
         setFriendsList(fetchedFriends);
         saveToCache(cacheKey, fetchedFriends, 180000);
@@ -184,54 +198,53 @@ export default function MoyuChatroom() {
       setIsLoading(false);
     }
 
-    // No composite indexes query fallback
-    // We query by channelId and limit(30), and we SORT in-memory
-    const q = query(
-      collection(db, 'chats'),
-      where('channelId', '==', activeChannelId),
-      limit(30)
-    );
+    const fetchChats = async () => {
+      try {
+        const q = query(
+          collection(db, 'chats'),
+          where('channelId', '==', activeChannelId),
+          limit(30)
+        );
 
-    const unsubscribe = onSnapshot(q, (snap) => {
-      setQuotaExceeded(false);
-      const fetched = snap.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          channelId: data.channelId,
-          senderId: data.senderId,
-          senderName: data.senderName,
-          senderPhoto: data.senderPhoto,
-          senderRole: data.senderRole,
-          content: data.content,
-          createdAt: data.createdAt,
-          timestamp: data.timestamp || Date.now(),
-          type: data.type || 'text',
-          actionType: data.actionType
-        } as ChatMessage;
-      });
+        const snap = await getDocs(q);
+        setQuotaExceeded(false);
+        const fetched = snap.docs.map(d => {
+          const data = d.data();
+          return {
+            id: d.id,
+            channelId: data.channelId,
+            senderId: data.senderId,
+            senderName: data.senderName,
+            senderPhoto: data.senderPhoto,
+            senderRole: data.senderRole,
+            content: data.content,
+            createdAt: data.createdAt,
+            timestamp: data.timestamp || Date.now(),
+            type: data.type || 'text',
+            actionType: data.actionType
+          } as ChatMessage;
+        });
 
-      // Sort in-memory oldest to newest for bottom-up chat display
-      fetched.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.timestamp || 0);
-        const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.timestamp || 0);
-        return timeA - timeB;
-      });
+        // Sort in-memory oldest to newest for bottom-up chat display
+        fetched.sort((a, b) => {
+          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.timestamp || 0);
+          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.timestamp || 0);
+          return timeA - timeB;
+        });
 
-      setMessages(fetched);
-      saveToCache(cacheKey, fetched);
-      setIsLoading(false);
-    }, (err) => {
-      console.error("Chats subscription error:", err);
-      if (err?.code === 'resource-exhausted') {
-        setQuotaExceeded(true);
+        setMessages(fetched);
+        saveToCache(cacheKey, fetched);
+        setIsLoading(false);
+      } catch (err: any) {
+        console.error("Chats fetch error:", err);
+        if (err?.code === 'resource-exhausted') {
+          setQuotaExceeded(true);
+        }
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    });
-
-    return () => {
-      unsubscribe();
     };
+
+    fetchChats();
   }, [activeChannelId]);
 
   // Scroll to bottom when message arrives

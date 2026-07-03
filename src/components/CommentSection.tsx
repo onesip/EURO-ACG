@@ -6,7 +6,7 @@ import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { useUserProfileModal } from './UserProfileModal';
 import { isQuotaExceeded } from '../lib/quota';
-import { loadFromCache, saveToCache } from '../lib/cache';
+import { COMMENT_PAGE_LIMIT } from '../config/limits';
 import { Send, MessageCircle } from 'lucide-react';
 
 export default function CommentSection({ parentCollection, parentId }: { parentCollection: 'activities' | 'posts' | 'services', parentId: string }) {
@@ -22,17 +22,10 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
       return;
     }
 
-    const cacheKey = `cached_comments_${parentCollection}_${parentId}`;
-    const cached = loadFromCache<any[]>(cacheKey);
-    if (cached) {
-      setComments(cached);
-    }
-
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
-      if (cached) return; // Skip network fetch if we have cache
       try {
-        const q = query(collection(db, parentCollection, parentId, 'comments'), orderBy('createdAt', 'desc'), limit(20));
+        const q = query(collection(db, parentCollection, parentId, 'comments'), orderBy('createdAt', 'desc'), limit(COMMENT_PAGE_LIMIT));
         const snapshot = await getDocs(q);
         setQuotaExceeded(false); // Success! Clear quota
         
@@ -45,7 +38,6 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
           return aTime - bTime;
         });
         setComments(commentsData);
-        saveToCache(cacheKey, commentsData, 180000); // Cache for 3 minutes
       } catch (error: any) {
         if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
@@ -77,7 +69,6 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
     // Update local state instantly
     setComments(prev => {
       const updated = [...prev, tempComment];
-      saveToCache(`cached_comments_${parentCollection}_${parentId}`, updated);
       return updated;
     });
 

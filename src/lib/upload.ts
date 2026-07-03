@@ -93,13 +93,6 @@ export const uploadToPngLog = async (rawFile: File): Promise<string> => {
     throw new Error(json.message || 'Image upload failed');
   } catch (error) {
     console.error('PngLog Upload Error:', error);
-    // If it fails (e.g. CORS or no driver), we fallback to base64 for the prototype
-    // In production, we'd want to fix the PngLog API issue
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
+    throw new Error('Image upload failed. Please try again later.');
   }
 };

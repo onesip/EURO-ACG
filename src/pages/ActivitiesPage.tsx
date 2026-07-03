@@ -10,7 +10,7 @@ import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
 import { Activity } from '../types';
 import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin, AlertCircle } from 'lucide-react';
-import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
+import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
 import { collection, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { cn } from '../lib/utils';
@@ -48,24 +48,16 @@ export default function ActivitiesPage() {
   useEffect(() => {
     setIndexRequired(false);
 
-    if (!user) {
-      setActivities([]);
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
 
     const fetchData = async () => {
-      try {
-        const cacheKey = `cached_activities_${selectedCountry}`;
-        const cached = loadFromCache<Activity[]>(cacheKey);
-        if (cached) {
-          setActivities(cached);
-          setIsLoading(false);
-          return;
-        }
+      if (!user && EMERGENCY_GUEST_FIRESTORE_OFF) {
+        setActivities([]);
+        setIsLoading(false);
+        return;
+      }
 
+      try {
         const constraints: any[] = [];
 
         if (selectedCountry !== 'ALL') {
@@ -73,7 +65,7 @@ export default function ActivitiesPage() {
         }
 
         constraints.push(orderBy('createdAt', 'desc'));
-        constraints.push(limit(USER_LIST_LIMIT));
+        constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
 
         const q = query(
           collection(db, 'activities'),
@@ -96,7 +88,6 @@ export default function ActivitiesPage() {
         });
 
         setActivities(activitiesData);
-        saveToCache(cacheKey, activitiesData, 180000); // Cache for 3 minutes
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);
@@ -201,7 +192,7 @@ export default function ActivitiesPage() {
         )}
       </div>
 
-      {!user ? (
+      {!user && EMERGENCY_GUEST_FIRESTORE_OFF ? (
         <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-3xl p-8 text-center max-w-2xl mx-auto my-12 shadow-2xl">
           <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
             <Sparkles className="w-8 h-8 text-indigo-400 animate-pulse" />
