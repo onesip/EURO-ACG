@@ -54,13 +54,34 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !content.trim()) return;
+    
+    const commentText = content.trim();
+    setContent('');
+
+    // Generate optimistic local comment
+    const tempComment = {
+      id: 'local-comment-' + Date.now(),
+      content: commentText,
+      authorId: user.uid,
+      authorName: profile?.displayName || user.displayName || 'User',
+      authorPhoto: profile?.photoURL || user.photoURL || '',
+      createdAt: { toMillis: () => Date.now(), toDate: () => new Date() } as any
+    };
+
+    // Update local state instantly
+    setComments(prev => {
+      const updated = [...prev, tempComment];
+      localStorage.setItem(`cached_comments_${parentCollection}_${parentId}`, JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       const parentDocRef = doc(db, parentCollection, parentId);
       const newCommentRef = doc(collection(db, parentCollection, parentId, 'comments'));
       
       await runTransaction(db, async (transaction) => {
         transaction.set(newCommentRef, {
-          content: content.trim(),
+          content: commentText,
           authorId: user.uid,
           authorName: profile?.displayName || 'User',
           authorPhoto: profile?.photoURL || '',
@@ -70,9 +91,11 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
           commentCount: increment(1)
         });
       });
-      setContent('');
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error("Firestore comment failed:", error);
+      if (error?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 

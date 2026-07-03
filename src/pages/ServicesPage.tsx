@@ -53,26 +53,59 @@ export default function ServicesPage() {
       alert(lang === 'zh' ? '请先登录以支持该服务！' : 'Please login to support this service!');
       return;
     }
-    const adRef = doc(db, 'services', adId);
+
     const hasSupported = currentSupports.includes(user.uid);
- 
+    const updatedSupports = hasSupported
+      ? currentSupports.filter(uid => uid !== user.uid)
+      : [...currentSupports, user.uid];
+
+    setAds(prev => {
+      const updated = prev.map(item => {
+        if (item.id === adId) {
+          return { ...item, supports: updatedSupports };
+        }
+        return item;
+      });
+      localStorage.setItem('cached_services', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
+      const adRef = doc(db, 'services', adId);
       await updateDoc(adRef, { 
         supports: hasSupported ? arrayRemove(user.uid) : arrayUnion(user.uid)
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to support ad", err);
+      if (err?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 
   const handlePin = async (adId: string, currentlyPinned: boolean = false) => {
     if (!isAdmin) return;
+
+    setAds(prev => {
+      const updated = prev.map(item => {
+        if (item.id === adId) {
+          return { ...item, isPinned: !currentlyPinned };
+        }
+        return item;
+      });
+      localStorage.setItem('cached_services', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       await updateDoc(doc(db, 'services', adId), {
         isPinned: !currentlyPinned
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to pin service", err);
+      if (err?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 
@@ -300,12 +333,19 @@ export default function ServicesPage() {
                       <button
                         type="button"
                         onClick={async () => {
+                          setAds(prev => {
+                            const updated = prev.filter(a => a.id !== ad.id);
+                            localStorage.setItem('cached_services', JSON.stringify(updated));
+                            return updated;
+                          });
+                          setConfirmDeleteId(null);
                           try {
                             await deleteDoc(doc(db, 'services', ad.id));
-                            setConfirmDeleteId(null);
-                          } catch (err) {
+                          } catch (err: any) {
                             console.error(err);
-                            alert('Delete failed');
+                            if (err?.code === 'resource-exhausted') {
+                              setQuotaExceeded(true);
+                            }
                           }
                         }}
                         className="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-1.5 py-0.5 rounded transition-colors"
@@ -414,6 +454,20 @@ export default function ServicesPage() {
             setIsComposeOpen(false);
             setEditingAd(null);
           }} 
+          onAdCreated={(newAd) => {
+            setAds(prev => {
+              const updated = [newAd, ...prev];
+              localStorage.setItem('cached_services', JSON.stringify(updated));
+              return updated;
+            });
+          }}
+          onAdUpdated={(updatedAd) => {
+            setAds(prev => {
+              const updated = prev.map(a => a.id === updatedAd.id ? { ...a, ...updatedAd } : a);
+              localStorage.setItem('cached_services', JSON.stringify(updated));
+              return updated;
+            });
+          }}
         />
       )}
 
@@ -429,8 +483,14 @@ export default function ServicesPage() {
   );
 }
 
-function ComposeModal({ defaultType, editAd, onClose }: { defaultType: ServiceType, editAd?: ServiceAd, onClose: () => void }) {
-  const { user, profile } = useAuth();
+function ComposeModal({ defaultType, editAd, onClose, onAdCreated, onAdUpdated }: { 
+  defaultType: ServiceType, 
+  editAd?: ServiceAd, 
+  onClose: () => void,
+  onAdCreated: (ad: ServiceAd) => void,
+  onAdUpdated: (ad: ServiceAd) => void
+}) {
+  const { user, profile, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const [content, setContent] = useState(editAd ? editAd.content : '');
   const [type, setType] = useState<ServiceType>(editAd ? editAd.type : defaultType);
@@ -451,6 +511,30 @@ function ComposeModal({ defaultType, editAd, onClose }: { defaultType: ServiceTy
     }
     setIsSubmitting(true);
     
+    // Generate optimistic ad
+    const localAd: ServiceAd = {
+      id: isEdit ? editAd.id : 'local-ad-' + Date.now(),
+      type,
+      content,
+      coverImage,
+      videoLink,
+      country,
+      authorId: user.uid,
+      authorName: profile?.displayName || user.displayName || 'User',
+      authorPhoto: profile?.photoURL || user.photoURL || '',
+      supports: isEdit ? (editAd.supports ?? []) : [],
+      commentCount: isEdit ? (editAd.commentCount ?? 0) : 0,
+      likeCount: isEdit ? (editAd.likeCount ?? 0) : 0,
+      createdAt: isEdit ? editAd.createdAt : { toMillis: () => Date.now(), toDate: () => new Date() } as any,
+      isPinned: isEdit ? (editAd.isPinned ?? false) : false
+    };
+
+    if (isEdit) {
+      onAdUpdated(localAd);
+    } else {
+      onAdCreated(localAd);
+    }
+
     try {
       if (isEdit) {
         await updateDoc(doc(db, 'services', editAd.id), {
@@ -478,9 +562,12 @@ function ComposeModal({ defaultType, editAd, onClose }: { defaultType: ServiceTy
         });
       }
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Failed to save service ad');
+      if (error?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
+      onClose();
     } finally {
       setIsSubmitting(false);
     }

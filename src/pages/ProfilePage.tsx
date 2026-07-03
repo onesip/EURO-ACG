@@ -24,7 +24,7 @@ const EUROPEAN_COUNTRIES = [
 ];
 
 export default function ProfilePage() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, updateProfileOptimistically, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { activeTheme, setThemeById } = useTheme();
   const [isSaving, setIsSaving] = useState(false);
@@ -80,7 +80,7 @@ export default function ProfilePage() {
             <p className="text-xs text-slate-400 leading-relaxed space-y-2">
               {lang === 'zh' ? (
                 <>
-                  若是您将项目部署在 Vercel 或是其他自定义域名，在点击登录时会报错 <strong>auth/unauthorized-domain</strong>。这是由于 Firebase 为了安全只允许白名单域名访问。
+                   若是您将项目部署在 Vercel 或是其他自定义域名，在点击登录时会报错 <strong>auth/unauthorized-domain</strong>。这是由于 Firebase 为了安全只允许白名单域名访问。
                   <br />
                   <span className="text-white block mt-2 font-medium">💡 修复步骤：</span>
                   1. 登录并打开您的 <strong>Firebase Console</strong>。
@@ -89,7 +89,7 @@ export default function ProfilePage() {
                   <br />
                   3. 找到 <strong>Authorized domains</strong>（授权网域）列表。
                   <br />
-                  4. 点击 <strong>Add domain</strong> 按钮，并添加您刚才部署的 Vercel 域名（例如：<code className="text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded">euro-acg.vercel.app</code>）。
+                  4. 点击 <strong>Add domain</strong> 按钮，并添加您刚才部署 de Vercel 域名（例如：<code className="text-indigo-300 bg-white/5 px-1.5 py-0.5 rounded">euro-acg.vercel.app</code>）。
                   <br />
                   5. 保存后即可完美顺畅登录！
                 </>
@@ -148,14 +148,23 @@ export default function ProfilePage() {
   const handleSave = async () => {
     if (!user) return;
     setIsSaving(true);
+    
+    // Optimistic update
+    updateProfileOptimistically(formData);
+
     try {
       const docRef = doc(db, 'users', user.uid);
       await setDoc(docRef, { ...formData, updatedAt: Date.now() }, { merge: true });
       await refreshProfile();
       alert('本命档案更新成功！Profile updated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('保存失败 Failed to update profile');
+      if (error?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+        alert(lang === 'zh' ? '本命档案已在本地保存更新！(由于云端额度超限，暂时保存在本地缓存)' : 'Profile updated and saved locally! (Cloud quota exceeded)');
+      } else {
+        alert('保存失败 Failed to update profile');
+      }
     } finally {
       setIsSaving(false);
     }

@@ -88,35 +88,60 @@ export default function ActivitiesPage() {
 
   const handlePin = async (activityId: string, currentlyPinned: boolean = false) => {
     if (!isAdmin) return;
+
+    setActivities(prev => {
+      const updated = prev.map(a => {
+        if (a.id === activityId) {
+          return { ...a, isPinned: !currentlyPinned };
+        }
+        return a;
+      });
+      localStorage.setItem('cached_activities', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       await updateDoc(doc(db, 'activities', activityId), {
         isPinned: !currentlyPinned
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to pin activity", err);
+      if (err?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 
   const handleJoin = async (activityId: string, isJoining: boolean) => {
     if (!user || !profile) return alert('Please login to join activities');
     
-    const activityRef = doc(db, 'activities', activityId);
     const participant = { uid: user.uid, role: profile.role, displayName: profile.displayName, photoURL: profile.photoURL };
     
     const activity = activities.find(a => a.id === activityId);
     if (!activity) return;
 
+    setActivities(prev => {
+      const updated = prev.map(a => {
+        if (a.id === activityId) {
+          const currentParticipants = a.participants || [];
+          const updatedParticipants = isJoining
+            ? [...currentParticipants.filter(p => p.uid !== user.uid), participant]
+            : currentParticipants.filter(p => p.uid !== user.uid);
+          return { ...a, participants: updatedParticipants };
+        }
+        return a;
+      });
+      localStorage.setItem('cached_activities', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
+      const activityRef = doc(db, 'activities', activityId);
       if (isJoining) {
         await updateDoc(activityRef, {
           participants: arrayUnion(participant)
         });
       } else {
-        // To remove properly, we need to find the exact object or use a different strategy.
-        // Since participants contains displayName/photoURL which might be stale, 
-        // it's safer to filter and set if we can't guarantee exact match.
-        // However, arrayRemove only works with exact matches.
-        // For now, let's use the current activity state to find the participant object to remove.
         const pToRemove = activity.participants.find(p => p.uid === user.uid);
         if (pToRemove) {
           await updateDoc(activityRef, {
@@ -124,9 +149,11 @@ export default function ActivitiesPage() {
           });
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error joining activity:", error);
-      alert("Failed to join. Please try again.");
+      if (error?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 
@@ -271,12 +298,19 @@ export default function ActivitiesPage() {
                             <button
                               type="button"
                               onClick={async () => {
+                                setActivities(prev => {
+                                  const updated = prev.filter(a => a.id !== activity.id);
+                                  localStorage.setItem('cached_activities', JSON.stringify(updated));
+                                  return updated;
+                                });
+                                setConfirmDeleteId(null);
                                 try {
                                   await deleteDoc(doc(db, 'activities', activity.id));
-                                  setConfirmDeleteId(null);
-                                } catch (err) {
+                                } catch (err: any) {
                                   console.error(err);
-                                  alert('Delete failed');
+                                  if (err?.code === 'resource-exhausted') {
+                                    setQuotaExceeded(true);
+                                  }
                                 }
                               }}
                               className="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-1.5 py-0.5 rounded transition-colors"
@@ -392,14 +426,33 @@ export default function ActivitiesPage() {
             setIsCreateModalOpen(false);
             setEditingActivity(null);
           }} 
+          onActivityCreated={(newAct) => {
+            setActivities(prev => {
+              const updated = [newAct, ...prev];
+              localStorage.setItem('cached_activities', JSON.stringify(updated));
+              return updated;
+            });
+          }}
+          onActivityUpdated={(updatedAct) => {
+            setActivities(prev => {
+              const updated = prev.map(a => a.id === updatedAct.id ? { ...a, ...updatedAct } : a);
+              localStorage.setItem('cached_activities', JSON.stringify(updated));
+              return updated;
+            });
+          }}
         />
       )}
     </div>
   );
 }
 
-function CreateActivityModal({ editActivity, onClose }: { editActivity?: Activity, onClose: () => void }) {
-  const { user } = useAuth();
+function CreateActivityModal({ editActivity, onClose, onActivityCreated, onActivityUpdated }: { 
+  editActivity?: Activity, 
+  onClose: () => void,
+  onActivityCreated: (activity: Activity) => void,
+  onActivityUpdated: (activity: Activity) => void
+}) {
+  const { user, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const [formData, setFormData] = useState({
     title: editActivity?.title || '',
@@ -442,6 +495,22 @@ function CreateActivityModal({ editActivity, onClose }: { editActivity?: Activit
     }
     setIsSubmitting(true);
     
+    // Generate optimistic activity
+    const localActivity: Activity = {
+      id: isEdit ? editActivity.id : 'local-act-' + Date.now(),
+      ...formData,
+      creatorId: user.uid,
+      participants: isEdit ? (editActivity.participants ?? []) : [],
+      createdAt: isEdit ? editActivity.createdAt : { toMillis: () => Date.now(), toDate: () => new Date() } as any,
+      isPinned: isEdit ? (editActivity.isPinned ?? false) : false
+    };
+
+    if (isEdit) {
+      onActivityUpdated(localActivity);
+    } else {
+      onActivityCreated(localActivity);
+    }
+
     try {
       if (isEdit) {
         await updateDoc(doc(db, 'activities', editActivity.id), {
@@ -459,9 +528,12 @@ function CreateActivityModal({ editActivity, onClose }: { editActivity?: Activit
         });
       }
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Failed to save activity');
+      if (error?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
+      onClose();
     } finally {
       setIsSubmitting(false);
     }

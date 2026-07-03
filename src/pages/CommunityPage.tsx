@@ -54,18 +54,39 @@ export default function CommunityPage() {
       alert(lang === 'zh' ? '请先登录以进行贴贴！' : 'Please login to like posts!');
       return;
     }
-    const postRef = doc(db, 'posts', postId);
-    
+
+    const isCurrentlyLiked = currentLikes.includes(user.uid);
+    const updatedLikes = isCurrentlyLiked
+      ? currentLikes.filter(uid => uid !== user.uid)
+      : [...currentLikes, user.uid];
+
+    const currentPost = posts.find(p => p.id === postId);
+    const updatedLikeCount = isCurrentlyLiked
+      ? Math.max(0, (currentPost?.likeCount ?? 1) - 1)
+      : (currentPost?.likeCount ?? 0) + 1;
+
+    setPosts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === postId) {
+          return { ...p, likes: updatedLikes, likeCount: updatedLikeCount };
+        }
+        return p;
+      });
+      localStorage.setItem('cached_community_posts', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
+      const postRef = doc(db, 'posts', postId);
       await runTransaction(db, async (transaction) => {
         const postDoc = await transaction.get(postRef);
         if (!postDoc.exists()) throw "Post does not exist!";
         
         const postData = postDoc.data();
         const likes = postData.likes || [];
-        const isCurrentlyLiked = likes.includes(user.uid);
+        const isCurrentlyLikedReal = likes.includes(user.uid);
 
-        if (isCurrentlyLiked) {
+        if (isCurrentlyLikedReal) {
           transaction.update(postRef, { 
             likes: arrayRemove(user.uid),
             likeCount: increment(-1)
@@ -77,19 +98,37 @@ export default function CommunityPage() {
           });
         }
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to like post", err);
+      if (err?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 
   const handlePin = async (postId: string, currentlyPinned: boolean = false) => {
     if (!isAdmin) return;
+
+    setPosts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === postId) {
+          return { ...p, isPinned: !currentlyPinned };
+        }
+        return p;
+      });
+      localStorage.setItem('cached_community_posts', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       await updateDoc(doc(db, 'posts', postId), {
         isPinned: !currentlyPinned
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to pin post", err);
+      if (err?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 
@@ -331,12 +370,19 @@ export default function CommunityPage() {
                         <button
                           type="button"
                           onClick={async () => {
+                            setPosts(prev => {
+                              const updated = prev.filter(p => p.id !== post.id);
+                              localStorage.setItem('cached_community_posts', JSON.stringify(updated));
+                              return updated;
+                            });
+                            setConfirmDeleteId(null);
                             try {
                               await deleteDoc(doc(db, 'posts', post.id));
-                              setConfirmDeleteId(null);
-                            } catch (err) {
+                            } catch (err: any) {
                               console.error(err);
-                              alert('Delete failed');
+                              if (err?.code === 'resource-exhausted') {
+                                setQuotaExceeded(true);
+                              }
                             }
                           }}
                           className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-2.5 py-1 rounded-lg transition-colors"
@@ -466,6 +512,20 @@ export default function CommunityPage() {
             setIsComposeOpen(false);
             setEditingPost(null);
           }} 
+          onPostCreated={(newPost) => {
+            setPosts(prev => {
+              const updated = [newPost, ...prev];
+              localStorage.setItem('cached_community_posts', JSON.stringify(updated));
+              return updated;
+            });
+          }}
+          onPostUpdated={(updatedPost) => {
+            setPosts(prev => {
+              const updated = prev.map(p => p.id === updatedPost.id ? { ...p, ...updatedPost } : p);
+              localStorage.setItem('cached_community_posts', JSON.stringify(updated));
+              return updated;
+            });
+          }}
         />
       )}
 
@@ -481,8 +541,14 @@ export default function CommunityPage() {
   );
 }
 
-function ComposeModal({ defaultType, editPost, onClose }: { defaultType: PostType, editPost?: Post, onClose: () => void }) {
-  const { user, profile } = useAuth();
+function ComposeModal({ defaultType, editPost, onClose, onPostCreated, onPostUpdated }: { 
+  defaultType: PostType, 
+  editPost?: Post, 
+  onClose: () => void,
+  onPostCreated: (post: Post) => void,
+  onPostUpdated: (post: Post) => void
+}) {
+  const { user, profile, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const [content, setContent] = useState(editPost ? editPost.content : '');
   const [type, setType] = useState<PostType>(editPost ? editPost.type : defaultType);
@@ -501,6 +567,29 @@ function ComposeModal({ defaultType, editPost, onClose }: { defaultType: PostTyp
       return;
     }
     setIsSubmitting(true);
+    
+    // Generate optimistic post
+    const localPost: Post = {
+      id: isEdit ? editPost.id : 'local-post-' + Date.now(),
+      type,
+      ...(type === 'tips' ? { subCategory } : {}),
+      content,
+      country,
+      authorId: user.uid,
+      authorName: profile?.displayName || user.displayName || 'User',
+      authorPhoto: profile?.photoURL || user.photoURL || '',
+      likeCount: isEdit ? (editPost.likeCount ?? 0) : 0,
+      commentCount: isEdit ? (editPost.commentCount ?? 0) : 0,
+      createdAt: isEdit ? editPost.createdAt : { toMillis: () => Date.now(), toDate: () => new Date() } as any,
+      likes: isEdit ? (editPost.likes ?? []) : [],
+      isPinned: isEdit ? (editPost.isPinned ?? false) : false
+    };
+
+    if (isEdit) {
+      onPostUpdated(localPost);
+    } else {
+      onPostCreated(localPost);
+    }
     
     try {
       if (isEdit) {
@@ -526,9 +615,12 @@ function ComposeModal({ defaultType, editPost, onClose }: { defaultType: PostTyp
         });
       }
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Failed to post');
+      if (error?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
+      onClose();
     } finally {
       setIsSubmitting(false);
     }

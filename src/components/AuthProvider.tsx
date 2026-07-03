@@ -12,6 +12,7 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
   isQuotaExceeded: boolean;
   setQuotaExceeded: (val: boolean) => void;
+  updateProfileOptimistically: (data: Partial<UserProfile>) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   refreshProfile: async () => {},
   isQuotaExceeded: false,
   setQuotaExceeded: () => {},
+  updateProfileOptimistically: () => {},
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -141,8 +143,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const updateProfileOptimistically = (data: Partial<UserProfile>) => {
+    if (!user) return;
+    setProfile(prev => {
+      const updated = prev ? { ...prev, ...data } : { uid: user.uid, ...data } as UserProfile;
+      localStorage.setItem(`profile_${user.uid}`, JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, refreshProfile, isQuotaExceeded: isQuotaExceededState, setQuotaExceeded }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile, 
+      loading, 
+      refreshProfile, 
+      isQuotaExceeded: isQuotaExceededState, 
+      setQuotaExceeded,
+      updateProfileOptimistically
+    }}>
       {children}
     </AuthContext.Provider>
   );

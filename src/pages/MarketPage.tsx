@@ -33,18 +33,39 @@ export default function MarketPage() {
       alert(lang === 'zh' ? '请先登录以进行贴贴！' : 'Please login to like posts!');
       return;
     }
-    const postRef = doc(db, 'posts', postId);
-    
+
+    const isCurrentlyLiked = currentLikes.includes(user.uid);
+    const updatedLikes = isCurrentlyLiked
+      ? currentLikes.filter(uid => uid !== user.uid)
+      : [...currentLikes, user.uid];
+
+    const currentPost = posts.find(p => p.id === postId);
+    const updatedLikeCount = isCurrentlyLiked
+      ? Math.max(0, (currentPost?.likeCount ?? 1) - 1)
+      : (currentPost?.likeCount ?? 0) + 1;
+
+    setPosts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === postId) {
+          return { ...p, likes: updatedLikes, likeCount: updatedLikeCount };
+        }
+        return p;
+      });
+      localStorage.setItem('cached_market_posts', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
+      const postRef = doc(db, 'posts', postId);
       await runTransaction(db, async (transaction) => {
         const postDoc = await transaction.get(postRef);
         if (!postDoc.exists()) throw "Post does not exist!";
         
         const postData = postDoc.data();
         const likes = postData.likes || [];
-        const isCurrentlyLiked = likes.includes(user.uid);
+        const isCurrentlyLikedReal = likes.includes(user.uid);
 
-        if (isCurrentlyLiked) {
+        if (isCurrentlyLikedReal) {
           transaction.update(postRef, { 
             likes: arrayRemove(user.uid),
             likeCount: increment(-1)
@@ -56,19 +77,37 @@ export default function MarketPage() {
           });
         }
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to like post", err);
+      if (err?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 
   const handlePin = async (postId: string, currentlyPinned: boolean = false) => {
     if (!isAdmin) return;
+
+    setPosts(prev => {
+      const updated = prev.map(p => {
+        if (p.id === postId) {
+          return { ...p, isPinned: !currentlyPinned };
+        }
+        return p;
+      });
+      localStorage.setItem('cached_market_posts', JSON.stringify(updated));
+      return updated;
+    });
+
     try {
       await updateDoc(doc(db, 'posts', postId), {
         isPinned: !currentlyPinned
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to pin market post", err);
+      if (err?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
     }
   };
 
@@ -213,12 +252,19 @@ export default function MarketPage() {
                     <button
                       type="button"
                       onClick={async () => {
+                        setPosts(prev => {
+                          const updated = prev.filter(p => p.id !== post.id);
+                          localStorage.setItem('cached_market_posts', JSON.stringify(updated));
+                          return updated;
+                        });
+                        setConfirmDeleteId(null);
                         try {
                           await deleteDoc(doc(db, 'posts', post.id));
-                          setConfirmDeleteId(null);
-                        } catch (err) {
+                        } catch (err: any) {
                           console.error(err);
-                          alert('Delete failed');
+                          if (err?.code === 'resource-exhausted') {
+                            setQuotaExceeded(true);
+                          }
                         }
                       }}
                       className="text-[9px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-1.5 py-0.5 rounded transition-colors"
@@ -317,6 +363,20 @@ export default function MarketPage() {
             setIsComposeOpen(false);
             setEditingItem(null);
           }} 
+          onItemCreated={(newItem) => {
+            setPosts(prev => {
+              const updated = [newItem, ...prev];
+              localStorage.setItem('cached_market_posts', JSON.stringify(updated));
+              return updated;
+            });
+          }}
+          onItemUpdated={(updatedItem) => {
+            setPosts(prev => {
+              const updated = prev.map(p => p.id === updatedItem.id ? { ...p, ...updatedItem } : p);
+              localStorage.setItem('cached_market_posts', JSON.stringify(updated));
+              return updated;
+            });
+          }}
         />
       )}
 
@@ -332,8 +392,13 @@ export default function MarketPage() {
   );
 }
 
-function ComposeMarketModal({ editItem, onClose }: { editItem?: Post, onClose: () => void }) {
-  const { user, profile } = useAuth();
+function ComposeMarketModal({ editItem, onClose, onItemCreated, onItemUpdated }: { 
+  editItem?: Post, 
+  onClose: () => void,
+  onItemCreated: (item: Post) => void,
+  onItemUpdated: (item: Post) => void
+}) {
+  const { user, profile, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const [content, setContent] = useState(editItem ? editItem.content : '');
   const [coverImage, setCoverImage] = useState(editItem?.coverImage || '');
@@ -352,6 +417,29 @@ function ComposeMarketModal({ editItem, onClose }: { editItem?: Post, onClose: (
     }
     setIsSubmitting(true);
     
+    // Generate optimistic item
+    const localItem: Post = {
+      id: isEdit ? editItem.id : 'local-market-' + Date.now(),
+      type: 'market',
+      content,
+      coverImage,
+      videoLink,
+      authorId: user.uid,
+      authorName: profile?.displayName || user.displayName || 'User',
+      authorPhoto: profile?.photoURL || user.photoURL || '',
+      likes: isEdit ? (editItem.likes ?? []) : [],
+      likeCount: isEdit ? (editItem.likeCount ?? 0) : 0,
+      commentCount: isEdit ? (editItem.commentCount ?? 0) : 0,
+      createdAt: isEdit ? editItem.createdAt : { toMillis: () => Date.now(), toDate: () => new Date() } as any,
+      isPinned: isEdit ? (editItem.isPinned ?? false) : false
+    };
+
+    if (isEdit) {
+      onItemUpdated(localItem);
+    } else {
+      onItemCreated(localItem);
+    }
+
     try {
       if (isEdit) {
         await updateDoc(doc(db, 'posts', editItem.id), {
@@ -376,9 +464,12 @@ function ComposeMarketModal({ editItem, onClose }: { editItem?: Post, onClose: (
         });
       }
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert('Failed to post');
+      if (error?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
+      onClose();
     } finally {
       setIsSubmitting(false);
     }
