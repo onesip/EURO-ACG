@@ -10,11 +10,10 @@ import { useTheme, ACG_THEMES } from './ThemeProvider';
 import QuotaBanner from './QuotaBanner';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
-  const { user, profile, isQuotaExceeded } = useAuth();
+  const { user, profile, isQuotaExceeded, isLoginModalOpen, setOpenLoginModal: setIsLoginModalOpen } = useAuth();
   const location = useLocation();
   const { t, lang, setLang } = useLanguage();
   const { activeTheme, setThemeById } = useTheme();
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   // Email login/register states
   const [emailMode, setEmailMode] = useState<'login' | 'register'>('login');

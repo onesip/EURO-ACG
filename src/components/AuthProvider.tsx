@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { User, onAuthStateChanged, getRedirectResult } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc, setDoc, collection, query, limit, getDocs } from 'firebase/firestore';
 import { UserProfile } from '../types';
@@ -13,6 +13,9 @@ interface AuthContextType {
   isQuotaExceeded: boolean;
   setQuotaExceeded: (val: boolean) => void;
   updateProfileOptimistically: (data: Partial<UserProfile>) => void;
+  openLoginModal: () => void;
+  setOpenLoginModal: (val: boolean) => void;
+  isLoginModalOpen: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,6 +26,9 @@ const AuthContext = createContext<AuthContextType>({
   isQuotaExceeded: false,
   setQuotaExceeded: () => {},
   updateProfileOptimistically: () => {},
+  openLoginModal: () => {},
+  setOpenLoginModal: () => {},
+  isLoginModalOpen: false,
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -30,6 +36,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isQuotaExceededState, setQuotaExceededState] = useState(isQuotaExceeded());
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   const setQuotaExceeded = (val: boolean) => {
     setQuotaHelper(val);
@@ -114,6 +121,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     }
 
+    const checkRedirect = async () => {
+      try {
+        await getRedirectResult(auth);
+      } catch (err: any) {
+        console.error("Redirect Login Error:", err);
+      }
+    };
+    checkRedirect();
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -150,7 +166,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       refreshProfile, 
       isQuotaExceeded: isQuotaExceededState, 
       setQuotaExceeded,
-      updateProfileOptimistically
+      updateProfileOptimistically,
+      openLoginModal: () => setIsLoginModalOpen(true),
+      setOpenLoginModal: setIsLoginModalOpen,
+      isLoginModalOpen
     }}>
       {children}
     </AuthContext.Provider>

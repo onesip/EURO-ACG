@@ -3,6 +3,8 @@ import {
   getAuth, 
   GoogleAuthProvider, 
   signInWithPopup, 
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -45,9 +47,22 @@ export const googleProvider = new GoogleAuthProvider();
 
 export const loginWithGoogle = async () => {
   try {
+    // If we're in WeChat or a mobile environment, popups often fail.
+    const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+    
+    if (isWeChat) {
+      await signInWithRedirect(auth, googleProvider);
+      return;
+    }
+    
     return await signInWithPopup(auth, googleProvider);
   } catch (error: any) {
     console.error("Firebase Auth Google Error:", error);
+    if (error.code === 'auth/popup-blocked') {
+      // Fallback to redirect if popup is blocked
+      await signInWithRedirect(auth, googleProvider);
+      return;
+    }
     alert(`Google 登录失败 (Google Sign-In Failed):\n${error.message}\n\n💡 提示: 如果这是在 Vercel 部署，请确保您的域名已添加到 Firebase 控制台的 [Authentication -> Settings -> Authorized domains]。`);
   }
 };

@@ -43,7 +43,7 @@ export default function ActivitiesPage() {
   const [joiningNoteId, setJoiningNoteId] = useState<string | null>(null);
   const [participantNote, setParticipantNote] = useState('');
   const [indexRequired, setIndexRequired] = useState(false);
-  const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
+  const { user, profile, setQuotaExceeded, isQuotaExceeded, openLoginModal } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
   const location = useLocation();
@@ -136,6 +136,18 @@ export default function ActivitiesPage() {
           setIndexRequired(true);
         } else if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
+        } else if (error?.code === 'permission-denied') {
+          console.error('Firestore Permission Error: ', JSON.stringify({
+            error: error.message,
+            operationType: 'list',
+            path: 'activities',
+            authInfo: {
+              userId: user?.uid,
+              email: user?.email,
+              emailVerified: user?.emailVerified,
+              isAnonymous: user?.isAnonymous
+            }
+          }));
         } else {
           console.error("Activities fetch error:", error);
         }
@@ -172,7 +184,10 @@ export default function ActivitiesPage() {
   };
 
   const handleJoin = async (activityId: string, isJoining: boolean, note?: string) => {
-    if (!user || !profile) return alert('Please login to join activities');
+    if (!user || !profile) {
+      openLoginModal();
+      return;
+    }
     
     const participant = { 
       uid: user.uid, 
@@ -278,7 +293,7 @@ export default function ActivitiesPage() {
         </div>
       )}
 
-      {!user && EMERGENCY_GUEST_FIRESTORE_OFF ? (
+      {!user && EMERGENCY_GUEST_FIRESTORE_OFF && activities.length === 0 ? (
         <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-3xl p-8 text-center max-w-2xl mx-auto my-12 shadow-2xl">
           <div className="w-16 h-16 bg-indigo-600/20 rounded-full flex items-center justify-center mx-auto mb-6">
             <Sparkles className="w-8 h-8 text-indigo-400 animate-pulse" />
