@@ -13,6 +13,7 @@ import UserAvatar from '../components/UserAvatar';
 import { Post, PostType } from '../types';
 import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { loadFromCache, saveToCache } from '../lib/cache';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
@@ -132,7 +133,14 @@ export default function CommunityPage() {
   };
 
   useEffect(() => {
-    setIsLoading(true);
+    const cacheKey = `cached_community_${activeTab}_${activeSubCategory}_${selectedCountry}`;
+    const cached = loadFromCache<Post[]>(cacheKey);
+    if (cached) {
+      setPosts(cached);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     setIndexRequired(false);
 
     const fetchData = async () => {
@@ -173,6 +181,7 @@ export default function CommunityPage() {
         });
 
         setPosts(sortedPosts);
+        saveToCache(cacheKey, sortedPosts);
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);

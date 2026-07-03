@@ -6,6 +6,7 @@ import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { useUserProfileModal } from './UserProfileModal';
 import { isQuotaExceeded } from '../lib/quota';
+import { loadFromCache, saveToCache } from '../lib/cache';
 import { Send, MessageCircle } from 'lucide-react';
 
 export default function CommentSection({ parentCollection, parentId }: { parentCollection: 'activities' | 'posts' | 'services', parentId: string }) {
@@ -16,11 +17,10 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
   const { showProfile } = useUserProfileModal();
 
   useEffect(() => {
-    const cached = localStorage.getItem(`cached_comments_${parentCollection}_${parentId}`);
+    const cacheKey = `cached_comments_${parentCollection}_${parentId}`;
+    const cached = loadFromCache<any[]>(cacheKey);
     if (cached) {
-      try {
-        setComments(JSON.parse(cached));
-      } catch (_) {}
+      setComments(cached);
     }
 
     const fetchData = async () => {
@@ -39,7 +39,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
           return aTime - bTime;
         });
         setComments(commentsData);
-        localStorage.setItem(`cached_comments_${parentCollection}_${parentId}`, JSON.stringify(commentsData));
+        saveToCache(cacheKey, commentsData);
       } catch (error: any) {
         if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
@@ -71,7 +71,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
     // Update local state instantly
     setComments(prev => {
       const updated = [...prev, tempComment];
-      localStorage.setItem(`cached_comments_${parentCollection}_${parentId}`, JSON.stringify(updated));
+      saveToCache(`cached_comments_${parentCollection}_${parentId}`, updated);
       return updated;
     });
 

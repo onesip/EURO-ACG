@@ -14,6 +14,7 @@ import UserAvatar from '../components/UserAvatar';
 import { Post } from '../types';
 import { Plus, X, Tag, PackageSearch, Image as ImageIcon, Link2, Sparkles, Edit, Trash2, Heart, Pin, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { loadFromCache, saveToCache } from '../lib/cache';
 
 export default function MarketPage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -111,7 +112,14 @@ export default function MarketPage() {
   };
 
   useEffect(() => {
-    setIsLoading(true);
+    const cacheKey = `cached_market_${selectedCountry}`;
+    const cached = loadFromCache<Post[]>(cacheKey);
+    if (cached) {
+      setPosts(cached);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     setIndexRequired(false);
 
     const fetchData = async () => {
@@ -147,6 +155,7 @@ export default function MarketPage() {
           return 0; // maintain Firestore orderBy order otherwise
         });
         setPosts(postsData);
+        saveToCache(cacheKey, postsData);
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);

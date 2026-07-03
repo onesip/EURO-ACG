@@ -11,6 +11,7 @@ import {
   UserPlus, UserMinus, UserCheck, MessageSquare, Send
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { loadFromCache, saveToCache } from '../lib/cache';
 import PostContent from './PostContent';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -100,14 +101,32 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
   useEffect(() => {
     if (!profileUid) return;
 
-    const fetchProfileData = async () => {
+    const profileCacheKey = `cached_user_profile_${profileUid}`;
+    const reviewsCacheKey = `cached_user_reviews_${profileUid}`;
+    
+    const cachedProfile = loadFromCache<UserProfile>(profileCacheKey);
+    const cachedReviews = loadFromCache<UserReview[]>(reviewsCacheKey);
+    
+    if (cachedProfile) {
+      setProfile(cachedProfile);
+      setLoading(false);
+    } else {
       setLoading(true);
+    }
+
+    if (cachedReviews) {
+      setReviews(cachedReviews);
+    }
+
+    const fetchProfileData = async () => {
       try {
         const docRef = doc(db, 'users', profileUid);
         const docSnap = await getDoc(docRef);
         setQuotaExceeded(false); // Success!
         if (docSnap.exists()) {
-          setProfile(docSnap.data() as UserProfile);
+          const uProfile = docSnap.data() as UserProfile;
+          setProfile(uProfile);
+          saveToCache(profileCacheKey, uProfile);
         } else {
           setProfile(null);
         }
@@ -117,7 +136,9 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
         } else {
           console.error('Failed to fetch public profile', err);
         }
-        setProfile(null);
+        if (!cachedProfile) {
+          setProfile(null);
+        }
       } finally {
         setLoading(false);
       }
@@ -129,7 +150,9 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
         const reviewsRef = collection(db, 'users', profileUid, 'reviews');
         const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(20));
         const snapReviews = await getDocs(qReviews);
-        setReviews(snapReviews.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview));
+        const reviewsData = snapReviews.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview);
+        setReviews(reviewsData);
+        saveToCache(reviewsCacheKey, reviewsData);
 
         // Check Friend Status (getDocs with limit 1 instead of onSnapshot)
         if (user && user.uid !== profileUid) {

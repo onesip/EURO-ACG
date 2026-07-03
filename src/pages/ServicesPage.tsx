@@ -14,6 +14,7 @@ import UserAvatar from '../components/UserAvatar';
 import { ServiceAd, ServiceType } from '../types';
 import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { loadFromCache, saveToCache } from '../lib/cache';
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
   { id: 'DE', name: '德国', flag: '🇩🇪', en: 'Germany' },
@@ -109,7 +110,14 @@ export default function ServicesPage() {
   };
 
   useEffect(() => {
-    setIsLoading(true);
+    const cacheKey = `cached_services_${activeTab}_${selectedCountry}`;
+    const cached = loadFromCache<ServiceAd[]>(cacheKey);
+    if (cached) {
+      setAds(cached);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     setIndexRequired(false);
 
     const fetchData = async () => {
@@ -145,6 +153,7 @@ export default function ServicesPage() {
           return 0; // maintain Firestore orderBy order otherwise
         });
         setAds(adsData);
+        saveToCache(cacheKey, adsData);
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);

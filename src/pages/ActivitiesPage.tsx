@@ -14,6 +14,7 @@ import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
 import { collection, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { cn } from '../lib/utils';
+import { loadFromCache, saveToCache } from '../lib/cache';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
@@ -43,7 +44,14 @@ export default function ActivitiesPage() {
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
   useEffect(() => {
-    setIsLoading(true);
+    const cacheKey = `cached_activities_${selectedCountry}`;
+    const cached = loadFromCache<Activity[]>(cacheKey);
+    if (cached) {
+      setActivities(cached);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     setIndexRequired(false);
 
     const fetchData = async () => {
@@ -78,6 +86,7 @@ export default function ActivitiesPage() {
         });
 
         setActivities(activitiesData);
+        saveToCache(cacheKey, activitiesData);
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);
