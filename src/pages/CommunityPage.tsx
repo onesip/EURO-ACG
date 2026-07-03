@@ -43,6 +43,7 @@ export default function CommunityPage() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [indexRequired, setIndexRequired] = useState(false);
   const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
@@ -72,7 +73,6 @@ export default function CommunityPage() {
         }
         return p;
       });
-      localStorage.setItem('cached_community_posts', JSON.stringify(updated));
       return updated;
     });
 
@@ -116,7 +116,6 @@ export default function CommunityPage() {
         }
         return p;
       });
-      localStorage.setItem('cached_community_posts', JSON.stringify(updated));
       return updated;
     });
 
@@ -133,19 +132,29 @@ export default function CommunityPage() {
   };
 
   useEffect(() => {
-    const cached = localStorage.getItem('cached_community_posts');
-    if (cached) {
-      try {
-        setPosts(JSON.parse(cached));
-      } catch (_) {}
-    }
     setIsLoading(true);
+    setIndexRequired(false);
 
     const fetchData = async () => {
       try {
+        const constraints: any[] = [
+          where("type", "==", activeTab)
+        ];
+
+        if (activeTab === 'tips' && activeSubCategory !== 'all') {
+          constraints.push(where("subCategory", "==", activeSubCategory));
+        }
+
+        if (selectedCountry !== 'ALL') {
+          constraints.push(where("country", "==", selectedCountry));
+        }
+
+        constraints.push(orderBy("createdAt", "desc"));
+        constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+
         const q = query(
           collection(db, 'posts'),
-          limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
+          ...constraints
         );
 
         const snapshot = await getDocs(q);
@@ -156,20 +165,18 @@ export default function CommunityPage() {
           ...doc.data()
         })) as Post[];
         
-        // Sort: Pinned posts first, then by createdAt desc
+        // Sort: Pinned posts first, keeping the rest in order of createdAt desc
         const sortedPosts = [...postsData].sort((a, b) => {
           if (a.isPinned && !b.isPinned) return -1;
           if (!a.isPinned && b.isPinned) return 1;
-          
-          const aTime = a.createdAt?.toMillis() || 0;
-          const bTime = b.createdAt?.toMillis() || 0;
-          return bTime - aTime;
+          return 0; // maintain Firestore orderBy order otherwise
         });
 
         setPosts(sortedPosts);
-        localStorage.setItem('cached_community_posts', JSON.stringify(sortedPosts));
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted') {
+        if (error?.code === 'failed-precondition') {
+          setIndexRequired(true);
+        } else if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else {
           console.error("Community posts fetch error:", error);
@@ -179,18 +186,9 @@ export default function CommunityPage() {
       }
     };
     fetchData();
-  }, [user, activeTab, selectedCountry, isQuotaExceeded]);
+  }, [user, activeTab, activeSubCategory, selectedCountry, isQuotaExceeded]);
 
-  const filteredPosts = posts.filter(p => {
-    if (p.type !== activeTab) return false;
-    if (activeTab === 'tips' && activeSubCategory !== 'all') {
-      if (p.subCategory !== activeSubCategory) return false;
-    }
-    if (selectedCountry !== 'ALL') {
-      return p.country === selectedCountry;
-    }
-    return true;
-  });
+  const filteredPosts = posts;
 
   const TIPS_SUB_CATEGORIES = [
     { id: 'all', label: '全部安利' },
@@ -215,6 +213,17 @@ export default function CommunityPage() {
           <span className="hidden sm:inline">{t('com.new')}</span>
         </button>
       </div>
+
+      {indexRequired && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-400 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <p className="text-sm">
+            {lang === 'zh' 
+              ? '需要创建 Firestore 复合索引以支持当前筛选。请在 Firebase 控制台创建对应的 Index。' 
+              : 'Firestore composite index is required for this query. Please create it in your Firebase Console.'}
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
@@ -314,6 +323,7 @@ export default function CommunityPage() {
                     uid={post.authorId} 
                     photoURL={post.authorPhoto} 
                     displayName={post.authorName} 
+                    showGender={false}
                     onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
                   />
                   <div className="min-w-0">
@@ -372,7 +382,6 @@ export default function CommunityPage() {
                           onClick={async () => {
                             setPosts(prev => {
                               const updated = prev.filter(p => p.id !== post.id);
-                              localStorage.setItem('cached_community_posts', JSON.stringify(updated));
                               return updated;
                             });
                             setConfirmDeleteId(null);
@@ -515,14 +524,12 @@ export default function CommunityPage() {
           onPostCreated={(newPost) => {
             setPosts(prev => {
               const updated = [newPost, ...prev];
-              localStorage.setItem('cached_community_posts', JSON.stringify(updated));
               return updated;
             });
           }}
           onPostUpdated={(updatedPost) => {
             setPosts(prev => {
               const updated = prev.map(p => p.id === updatedPost.id ? { ...p, ...updatedPost } : p);
-              localStorage.setItem('cached_community_posts', JSON.stringify(updated));
               return updated;
             });
           }}

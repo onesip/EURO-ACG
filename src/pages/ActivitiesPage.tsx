@@ -35,6 +35,7 @@ export default function ActivitiesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [indexRequired, setIndexRequired] = useState(false);
   const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
@@ -42,17 +43,24 @@ export default function ActivitiesPage() {
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
   useEffect(() => {
-    const cached = localStorage.getItem('cached_activities');
-    if (cached) {
-      try {
-        setActivities(JSON.parse(cached));
-      } catch (_) {}
-    }
     setIsLoading(true);
+    setIndexRequired(false);
 
     const fetchData = async () => {
       try {
-        const q = query(collection(db, 'activities'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+        const constraints: any[] = [];
+
+        if (selectedCountry !== 'ALL') {
+          constraints.push(where('country', '==', selectedCountry));
+        }
+
+        constraints.push(orderBy('createdAt', 'desc'));
+        constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+
+        const q = query(
+          collection(db, 'activities'),
+          ...constraints
+        );
         
         const snapshot = await getDocs(q);
         setQuotaExceeded(false); // Success! Clear quota if it was set
@@ -62,19 +70,18 @@ export default function ActivitiesPage() {
           ...doc.data()
         })) as Activity[];
         
-        // Sort: Pinned first, then by createdAt desc
+        // Sort: Pinned first, keeping the rest in order of createdAt desc
         activitiesData.sort((a, b) => {
           if (a.isPinned && !b.isPinned) return -1;
           if (!a.isPinned && b.isPinned) return 1;
-          const aTime = a.createdAt?.toMillis() || 0;
-          const bTime = b.createdAt?.toMillis() || 0;
-          return bTime - aTime;
+          return 0; // maintain Firestore orderBy order otherwise
         });
 
         setActivities(activitiesData);
-        localStorage.setItem('cached_activities', JSON.stringify(activitiesData));
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted') {
+        if (error?.code === 'failed-precondition') {
+          setIndexRequired(true);
+        } else if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else {
           console.error("Activities fetch error:", error);
@@ -96,7 +103,6 @@ export default function ActivitiesPage() {
         }
         return a;
       });
-      localStorage.setItem('cached_activities', JSON.stringify(updated));
       return updated;
     });
 
@@ -131,7 +137,6 @@ export default function ActivitiesPage() {
         }
         return a;
       });
-      localStorage.setItem('cached_activities', JSON.stringify(updated));
       return updated;
     });
 
@@ -157,10 +162,7 @@ export default function ActivitiesPage() {
     }
   };
 
-  const filteredActivities = activities.filter(activity => {
-    if (selectedCountry === 'ALL') return true;
-    return activity.country === selectedCountry;
-  });
+  const filteredActivities = activities;
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -177,6 +179,17 @@ export default function ActivitiesPage() {
           <span className="hidden sm:inline">{t('act.new')}</span>
         </button>
       </div>
+
+      {indexRequired && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-400 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <p className="text-sm">
+            {lang === 'zh' 
+              ? '需要创建 Firestore 复合索引以支持当前筛选。请在 Firebase 控制台创建对应的 Index。' 
+              : 'Firestore composite index is required for this query. Please create it in your Firebase Console.'}
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
@@ -300,7 +313,6 @@ export default function ActivitiesPage() {
                               onClick={async () => {
                                 setActivities(prev => {
                                   const updated = prev.filter(a => a.id !== activity.id);
-                                  localStorage.setItem('cached_activities', JSON.stringify(updated));
                                   return updated;
                                 });
                                 setConfirmDeleteId(null);
@@ -429,14 +441,12 @@ export default function ActivitiesPage() {
           onActivityCreated={(newAct) => {
             setActivities(prev => {
               const updated = [newAct, ...prev];
-              localStorage.setItem('cached_activities', JSON.stringify(updated));
               return updated;
             });
           }}
           onActivityUpdated={(updatedAct) => {
             setActivities(prev => {
               const updated = prev.map(a => a.id === updatedAct.id ? { ...a, ...updatedAct } : a);
-              localStorage.setItem('cached_activities', JSON.stringify(updated));
               return updated;
             });
           }}

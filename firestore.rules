@@ -10,13 +10,15 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if request.query.limit != null && request.query.limit <= 20;
       allow create: if isAuthenticated() && request.auth.uid == userId;
       allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
       allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
 
       match /reviews/{reviewId} {
-        allow read: if true;
+        allow get: if true;
+        allow list: if request.query.limit != null && request.query.limit <= 20;
         allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid && userId != request.auth.uid;
         allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || userId == request.auth.uid);
       }
@@ -28,58 +30,86 @@ service cloud.firestore {
     }
 
     match /friendRequests/{requestId} {
-      allow read: if isAuthenticated() && (resource.data.fromId == request.auth.uid || resource.data.toId == request.auth.uid);
+      allow get: if isAuthenticated() && (resource.data.fromId == request.auth.uid || resource.data.toId == request.auth.uid);
+      allow list: if isAuthenticated() && request.query.limit != null && request.query.limit <= 20;
       allow create: if isAuthenticated() && request.resource.data.fromId == request.auth.uid;
       allow update: if isAuthenticated() && (resource.data.toId == request.auth.uid || resource.data.fromId == request.auth.uid);
       allow delete: if isAuthenticated() && (resource.data.fromId == request.auth.uid || resource.data.toId == request.auth.uid);
     }
 
     match /activities/{activityId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if (request.query.limit != null && request.query.limit <= 3) || (isAuthenticated() && request.query.limit != null && request.query.limit <= 20);
       allow create: if isAuthenticated() && request.resource.data.creatorId == request.auth.uid;
       allow update: if isAuthenticated() && (
         resource.data.creatorId == request.auth.uid ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants']) ||
-        isAdmin()
+        isAdmin() ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'commentCount']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['commentCount']) ||
+           request.resource.data.commentCount == resource.data.get('commentCount', 0) + 1 ||
+           request.resource.data.commentCount == resource.data.get('commentCount', 0) - 1)
+        )
       );
       allow delete: if isAuthenticated() && (resource.data.creatorId == request.auth.uid || isAdmin());
       
       match /comments/{commentId} {
-        allow read: if true;
+        allow get: if true;
+        allow list: if request.query.limit != null && request.query.limit <= 20;
         allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
         allow update, delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
       }
     }
 
     match /posts/{postId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if (request.query.limit != null && request.query.limit <= 3) || (isAuthenticated() && request.query.limit != null && request.query.limit <= 20);
       allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
       allow update: if isAuthenticated() && (
         resource.data.authorId == request.auth.uid ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) ||
-        isAdmin()
+        isAdmin() ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes', 'likeCount', 'commentCount']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['likeCount']) ||
+           request.resource.data.likeCount == resource.data.get('likeCount', 0) + 1 ||
+           request.resource.data.likeCount == resource.data.get('likeCount', 0) - 1) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['commentCount']) ||
+           request.resource.data.commentCount == resource.data.get('commentCount', 0) + 1 ||
+           request.resource.data.commentCount == resource.data.get('commentCount', 0) - 1)
+        )
       );
       allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin());
       
       match /comments/{commentId} {
-        allow read: if true;
+        allow get: if true;
+        allow list: if request.query.limit != null && request.query.limit <= 20;
         allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
         allow update, delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
       }
     }
 
     match /services/{serviceId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if (request.query.limit != null && request.query.limit <= 3) || (isAuthenticated() && request.query.limit != null && request.query.limit <= 20);
       allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
       allow update: if isAuthenticated() && (
         resource.data.authorId == request.auth.uid ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supports']) ||
-        isAdmin()
+        isAdmin() ||
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supports', 'supportCount', 'commentCount']) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['commentCount']) ||
+           request.resource.data.commentCount == resource.data.get('commentCount', 0) + 1 ||
+           request.resource.data.commentCount == resource.data.get('commentCount', 0) - 1) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['supportCount']) ||
+           request.resource.data.supportCount == resource.data.get('supportCount', 0) + 1 ||
+           request.resource.data.supportCount == resource.data.get('supportCount', 0) - 1)
+        )
       );
       allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid || isAdmin());
       
       match /comments/{commentId} {
-        allow read: if true;
+        allow get: if true;
+        allow list: if request.query.limit != null && request.query.limit <= 20;
         allow create: if isAuthenticated() && request.resource.data.authorId == request.auth.uid;
         allow update, delete: if isAuthenticated() && resource.data.authorId == request.auth.uid;
       }

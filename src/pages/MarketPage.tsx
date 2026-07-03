@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
-import { collection, query, addDoc, serverTimestamp, where, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, where, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -22,6 +22,7 @@ export default function MarketPage() {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<Post | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [indexRequired, setIndexRequired] = useState(false);
   const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
@@ -51,7 +52,6 @@ export default function MarketPage() {
         }
         return p;
       });
-      localStorage.setItem('cached_market_posts', JSON.stringify(updated));
       return updated;
     });
 
@@ -95,7 +95,6 @@ export default function MarketPage() {
         }
         return p;
       });
-      localStorage.setItem('cached_market_posts', JSON.stringify(updated));
       return updated;
     });
 
@@ -112,20 +111,25 @@ export default function MarketPage() {
   };
 
   useEffect(() => {
-    const cached = localStorage.getItem('cached_market_posts');
-    if (cached) {
-      try {
-        setPosts(JSON.parse(cached));
-      } catch (_) {}
-    }
     setIsLoading(true);
+    setIndexRequired(false);
 
     const fetchData = async () => {
       try {
+        const constraints: any[] = [
+          where('type', '==', 'market')
+        ];
+
+        if (selectedCountry !== 'ALL') {
+          constraints.push(where('country', '==', selectedCountry));
+        }
+
+        constraints.push(orderBy('createdAt', 'desc'));
+        constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+
         const q = query(
           collection(db, 'posts'), 
-          where('type', '==', 'market'),
-          limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT)
+          ...constraints
         );
 
         const snapshot = await getDocs(q);
@@ -136,18 +140,17 @@ export default function MarketPage() {
           ...doc.data()
         })) as Post[];
         
-        // Sort: Pinned first, then by createdAt desc
+        // Sort: Pinned first, keeping rest in order of createdAt desc
         postsData.sort((a, b) => {
           if (a.isPinned && !b.isPinned) return -1;
           if (!a.isPinned && b.isPinned) return 1;
-          const aTime = a.createdAt?.toMillis() || 0;
-          const bTime = b.createdAt?.toMillis() || 0;
-          return bTime - aTime;
+          return 0; // maintain Firestore orderBy order otherwise
         });
         setPosts(postsData);
-        localStorage.setItem('cached_market_posts', JSON.stringify(postsData));
       } catch (error: any) {
-        if (error?.code === 'resource-exhausted') {
+        if (error?.code === 'failed-precondition') {
+          setIndexRequired(true);
+        } else if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
         } else {
           console.error("Market posts fetch error:", error);
@@ -174,6 +177,17 @@ export default function MarketPage() {
           <span className="hidden sm:inline">{t('mkt.new')}</span>
         </button>
       </div>
+
+      {indexRequired && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-400 flex items-center gap-3 col-span-full">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <p className="text-sm">
+            {lang === 'zh' 
+              ? '需要创建 Firestore 复合索引以支持当前筛选。请在 Firebase 控制台创建对应的 Index。' 
+              : 'Firestore composite index is required for this query. Please create it in your Firebase Console.'}
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         {isLoading ? (
@@ -232,6 +246,7 @@ export default function MarketPage() {
                     photoURL={post.authorPhoto} 
                     displayName={post.authorName} 
                     size="sm"
+                    showGender={false}
                     onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
                   />
                   <button 
@@ -254,7 +269,6 @@ export default function MarketPage() {
                       onClick={async () => {
                         setPosts(prev => {
                           const updated = prev.filter(p => p.id !== post.id);
-                          localStorage.setItem('cached_market_posts', JSON.stringify(updated));
                           return updated;
                         });
                         setConfirmDeleteId(null);
@@ -366,14 +380,12 @@ export default function MarketPage() {
           onItemCreated={(newItem) => {
             setPosts(prev => {
               const updated = [newItem, ...prev];
-              localStorage.setItem('cached_market_posts', JSON.stringify(updated));
               return updated;
             });
           }}
           onItemUpdated={(updatedItem) => {
             setPosts(prev => {
               const updated = prev.map(p => p.id === updatedItem.id ? { ...p, ...updatedItem } : p);
-              localStorage.setItem('cached_market_posts', JSON.stringify(updated));
               return updated;
             });
           }}

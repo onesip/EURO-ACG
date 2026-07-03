@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT } from '../config/limits';
-import { doc, getDoc, collection, query, where, onSnapshot, addDoc, serverTimestamp, deleteDoc, updateDoc, setDoc, orderBy, limit } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, addDoc, serverTimestamp, deleteDoc, updateDoc, setDoc, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { UserProfile, UserRole, Gender, UserReview, FriendRequest } from '../types';
 import { useLanguage } from './LanguageProvider';
@@ -123,53 +123,56 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
       }
     };
 
-    fetchProfileData();
+    const fetchReviewsAndFriends = async () => {
+      try {
+        // Fetch Reviews (getDocs with limit 20 instead of onSnapshot)
+        const reviewsRef = collection(db, 'users', profileUid, 'reviews');
+        const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(20));
+        const snapReviews = await getDocs(qReviews);
+        setReviews(snapReviews.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview));
 
-    // Fetch Reviews
-    const reviewsRef = collection(db, 'users', profileUid, 'reviews');
-    const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
-    const unsubReviews = onSnapshot(qReviews, (snap) => {
-      setQuotaExceeded(false);
-      setReviews(snap.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview));
-    }, (err) => {
-      if (err?.code === 'resource-exhausted') setQuotaExceeded(true);
-    });
+        // Check Friend Status (getDocs with limit 1 instead of onSnapshot)
+        if (user && user.uid !== profileUid) {
+          const q1 = query(collection(db, 'friendRequests'), where('fromId', '==', user.uid), where('toId', '==', profileUid), limit(1));
+          const snap1 = await getDocs(q1);
+          if (!snap1.empty) {
+            const req = snap1.docs[0].data() as FriendRequest;
+            setFriendRequestId(snap1.docs[0].id);
+            if (req.status === 'accepted') setFriendStatus('friends');
+            else setFriendStatus('pending_sent');
+            return;
+          }
 
-    // Check Friend Status
-    let unsubFriends = () => {};
-    if (user && user.uid !== profileUid) {
-      const q1 = query(collection(db, 'friendRequests'), where('fromId', '==', user.uid), where('toId', '==', profileUid));
-      const q2 = query(collection(db, 'friendRequests'), where('fromId', '==', profileUid), where('toId', '==', user.uid));
-      
-      const unsub1 = onSnapshot(q1, (snap) => {
-        if (!snap.empty) {
-          const req = snap.docs[0].data() as FriendRequest;
-          setFriendRequestId(snap.docs[0].id);
-          if (req.status === 'accepted') setFriendStatus('friends');
-          else setFriendStatus('pending_sent');
+          const q2 = query(collection(db, 'friendRequests'), where('fromId', '==', profileUid), where('toId', '==', user.uid), limit(1));
+          const snap2 = await getDocs(q2);
+          if (!snap2.empty) {
+            const req = snap2.docs[0].data() as FriendRequest;
+            setFriendRequestId(snap2.docs[0].id);
+            if (req.status === 'accepted') setFriendStatus('friends');
+            else setFriendStatus('pending_received');
+            return;
+          }
+
+          setFriendStatus('none');
+          setFriendRequestId(null);
         }
-      });
-      const unsub2 = onSnapshot(q2, (snap) => {
-        if (!snap.empty) {
-          const req = snap.docs[0].data() as FriendRequest;
-          setFriendRequestId(snap.docs[0].id);
-          if (req.status === 'accepted') setFriendStatus('friends');
-          else setFriendStatus('pending_received');
+      } catch (err: any) {
+        if (err?.code === 'resource-exhausted') {
+          setQuotaExceeded(true);
+        } else {
+          console.error('Failed to fetch reviews/friends', err);
         }
-      });
-      unsubFriends = () => { unsub1(); unsub2(); };
-    }
-
-    return () => {
-      unsubReviews();
-      unsubFriends();
+      }
     };
+
+    fetchProfileData();
+    fetchReviewsAndFriends();
   }, [profileUid, user, isQuotaExceeded]);
 
   const handleAddFriend = async () => {
     if (!user || !profileUid || !currentUserProfile) return;
     try {
-      await addDoc(collection(db, 'friendRequests'), {
+      const docRef = await addDoc(collection(db, 'friendRequests'), {
         fromId: user.uid,
         fromName: currentUserProfile.displayName,
         fromPhoto: currentUserProfile.photoURL,
@@ -177,6 +180,8 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
         status: 'pending',
         createdAt: serverTimestamp()
       });
+      setFriendRequestId(docRef.id);
+      setFriendStatus('pending_sent');
     } catch (err) {
       console.error(err);
     }
@@ -189,6 +194,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
       // Also add to friends subcollection for both
       await setDoc(doc(db, 'users', user.uid, 'friends', profileUid), { uid: profileUid, createdAt: serverTimestamp() });
       await setDoc(doc(db, 'users', profileUid, 'friends', user.uid), { uid: user.uid, createdAt: serverTimestamp() });
+      setFriendStatus('friends');
     } catch (err) {
       console.error(err);
     }
@@ -199,13 +205,23 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
     if (!user || !profileUid || !newReview.trim() || !currentUserProfile) return;
     setIsSubmittingReview(true);
     try {
-      await addDoc(collection(db, 'users', profileUid, 'reviews'), {
+      const docRef = await addDoc(collection(db, 'users', profileUid, 'reviews'), {
         authorId: user.uid,
         authorName: currentUserProfile.displayName,
         authorPhoto: currentUserProfile.photoURL,
         content: newReview,
         createdAt: serverTimestamp()
       });
+      
+      const newReviewObj: UserReview = {
+        id: docRef.id,
+        authorId: user.uid,
+        authorName: currentUserProfile.displayName,
+        authorPhoto: currentUserProfile.photoURL,
+        content: newReview,
+        createdAt: { toMillis: () => Date.now(), seconds: Date.now() / 1000, nanoseconds: 0 } as any
+      };
+      setReviews(prev => [newReviewObj, ...prev]);
       setNewReview('');
     } catch (err) {
       console.error(err);

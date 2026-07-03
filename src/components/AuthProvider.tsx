@@ -107,6 +107,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Probe query to clear quota flag if it was false-positively set or has reset
     const probeQuota = async () => {
+      const until = localStorage.getItem('quotaExceededUntil');
+      if (!until) return; // No quotaExceededUntil, do not active probe
+
+      const untilTime = parseInt(until, 10);
+      if (isNaN(untilTime) || Date.now() > untilTime) {
+        // It has expired! Clean it up
+        localStorage.removeItem('quotaExceededUntil');
+        localStorage.removeItem('quotaExceeded');
+        setQuotaExceeded(false);
+        return;
+      }
+
       try {
         console.log("Probing database quota...");
         const q = query(collection(db, 'posts'), limit(1));
@@ -117,7 +129,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error("Database probe error:", err.code, err.message);
         if (err?.code === 'resource-exhausted') {
           setQuotaExceeded(true);
-        } else if (err?.code === 'permission-denied') {
+        } else {
+          // Non resource-exhausted errors cannot be considered quota limit
           setQuotaExceeded(false);
         }
       }
