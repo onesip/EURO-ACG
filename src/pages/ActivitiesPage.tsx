@@ -50,6 +50,23 @@ export default function ActivitiesPage() {
   const queryParams = new URLSearchParams(location.search);
   const sharedId = queryParams.get('id');
 
+  useEffect(() => {
+    if (sharedId && activities.length > 0) {
+      const activity = activities.find(a => a.id === sharedId);
+      if (activity) {
+        const originalTitle = document.title;
+        const newTitle = lang === 'zh' ? `团咪开团我秒跟：${activity.title}` : `Join my activity: ${activity.title}`;
+        document.title = newTitle;
+        
+        // Also update meta description if possible (browser side only)
+        const metaDesc = document.querySelector('meta[name="description"]');
+        if (metaDesc) metaDesc.setAttribute('content', activity.description.substring(0, 100));
+
+        return () => { document.title = originalTitle; };
+      }
+    }
+  }, [sharedId, activities, lang]);
+
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
   useEffect(() => {
@@ -68,55 +85,52 @@ export default function ActivitiesPage() {
       }
 
       try {
-        const constraints: any[] = [];
+        let activitiesData: Activity[] = [];
 
-        if (selectedCountry !== 'ALL') {
-          constraints.push(where('country', '==', selectedCountry));
-        }
-
-        constraints.push(orderBy('createdAt', 'desc'));
-        constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
-
-        const q = query(
-          collection(db, 'activities'),
-          ...constraints
-        );
-        
-        const snapshot = await getDocs(q);
-        setQuotaExceeded(false); // Success! Clear quota if it was set
-        
-        const activitiesData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Activity[];
-
+        // 1. If sharedId is present, try to fetch it first (even for guests)
         if (sharedId) {
-          // If we have a shared ID, we prioritize showing ONLY that item 
-          // or showing it at the top if it's not in the main list
           try {
             const sharedDoc = await getDoc(doc(db, 'activities', sharedId));
             if (sharedDoc.exists()) {
-              const sharedItem = { id: sharedDoc.id, ...sharedDoc.data() } as Activity;
-              // If it's already in the list, move it to top
-              const existingIndex = activitiesData.findIndex(a => a.id === sharedId);
-              if (existingIndex !== -1) {
-                activitiesData.splice(existingIndex, 1);
-              }
-              activitiesData.unshift(sharedItem);
+              activitiesData.push({ id: sharedDoc.id, ...sharedDoc.data() } as Activity);
             }
           } catch (err) {
             console.error("Failed to fetch shared activity:", err);
           }
         }
+
+        // 2. Fetch the rest of the activities if not in strict guest mode
+        // or if we want to show other activities alongside the shared one
+        if (user || !EMERGENCY_GUEST_FIRESTORE_OFF) {
+          const constraints: any[] = [];
+          if (selectedCountry !== 'ALL') {
+            constraints.push(where('country', '==', selectedCountry));
+          }
+          constraints.push(orderBy('createdAt', 'desc'));
+          constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+
+          const q = query(collection(db, 'activities'), ...constraints);
+          const snapshot = await getDocs(q);
+          
+          snapshot.docs.forEach(doc => {
+            const data = { id: doc.id, ...doc.data() } as Activity;
+            if (!activitiesData.find(a => a.id === data.id)) {
+              activitiesData.push(data);
+            }
+          });
+        }
         
-        // Sort: Pinned first, keeping the rest in order of createdAt desc
+        // Sort: Pinned first, then by sharedId (if present), then by createdAt desc
         activitiesData.sort((a, b) => {
+          if (a.id === sharedId) return -1;
+          if (b.id === sharedId) return 1;
           if (a.isPinned && !b.isPinned) return -1;
           if (!a.isPinned && b.isPinned) return 1;
-          return 0; // maintain Firestore orderBy order otherwise
+          return 0;
         });
 
         setActivities(activitiesData);
+        setQuotaExceeded(false);
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);
@@ -401,49 +415,73 @@ export default function ActivitiesPage() {
 
               {/* Participants Solitaire Style */}
               {(activity.participants?.length || 0) > 0 && (
-                <div className="mb-6 space-y-2">
+                <div className="mb-6 space-y-3">
                   <div className="flex items-center justify-between px-1">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                      {lang === 'zh' ? '接龙上车名单' : 'Participant Solitaire'}
-                    </span>
-                    <span className="text-[10px] font-medium text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
+                        {lang === 'zh' ? '接龙上车名单' : 'Join The Train'}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-black text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
                       {activity.participants?.length} {lang === 'zh' ? '人已上车' : 'Joined'}
                     </span>
                   </div>
-                  <div className="bg-black/20 rounded-2xl border border-white/5 divide-y divide-white/5">
+                  <div className="bg-black/40 rounded-3xl border border-white/5 overflow-hidden divide-y divide-white/5 shadow-2xl">
                     {activity.participants?.map((p, i) => (
-                      <div key={i} className="p-3 flex items-start gap-3 group/participant">
-                        <div className="relative">
+                      <div key={i} className={cn(
+                        "p-4 flex items-start gap-4 transition-colors hover:bg-white/[0.02]",
+                        p.uid === user?.uid && "bg-indigo-500/[0.03]"
+                      )}>
+                        <div className="relative flex-shrink-0">
                           <UserAvatar 
                             uid={p.uid} 
                             photoURL={p.photoURL} 
                             displayName={p.displayName} 
-                            size="sm" 
+                            size="md" 
                             showGender={false}
-                            className="border border-white/10"
+                            className={cn(
+                              "border-2",
+                              p.uid === user?.uid ? "border-indigo-500/50" : "border-white/10"
+                            )}
                             onClick={() => showProfile(p.uid, { displayName: p.displayName, photoURL: p.photoURL })}
                           />
-                          <div className="absolute -top-1 -left-1 w-4 h-4 bg-slate-800 border border-white/10 rounded-full flex items-center justify-center text-[9px] font-bold text-slate-400">
+                          <div className={cn(
+                            "absolute -top-1 -left-1 w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-black shadow-lg border",
+                            i === 0 ? "bg-amber-500 text-amber-950 border-amber-400" : 
+                            i === 1 ? "bg-slate-300 text-slate-800 border-white" :
+                            i === 2 ? "bg-orange-600 text-orange-50 border-orange-400" :
+                            "bg-slate-800 text-slate-400 border-white/10"
+                          )}>
                             {i + 1}
                           </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className={cn(
-                              "text-xs font-bold truncate",
-                              p.uid === user?.uid ? "text-indigo-400" : "text-white"
-                            )}>
-                              {p.displayName}
-                              {p.uid === user?.uid && (lang === 'zh' ? ' (我)' : ' (Me)')}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-medium px-1.5 py-0.5 bg-white/5 rounded capitalize">
+                        <div className="flex-1 min-w-0 pt-0.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className={cn(
+                                "text-sm font-black truncate",
+                                p.uid === user?.uid ? "text-indigo-400" : "text-white"
+                              )}>
+                                {p.displayName}
+                              </span>
+                              {p.uid === user?.uid && (
+                                <span className="text-[9px] font-bold text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                                  {lang === 'zh' ? '我' : 'Me'}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[9px] text-slate-500 font-bold px-1.5 py-0.5 bg-white/5 rounded-md uppercase tracking-wider">
                               {p.role}
                             </span>
                           </div>
                           {p.notes && (
-                            <p className="text-[11px] text-slate-400 mt-0.5 italic leading-relaxed">
-                              "{p.notes}"
-                            </p>
+                            <div className="mt-2 flex items-start gap-2">
+                              <div className="w-1 h-auto min-h-[12px] bg-indigo-500/30 rounded-full mt-1" />
+                              <p className="text-xs text-slate-400 font-medium leading-relaxed break-words italic">
+                                {p.notes}
+                              </p>
+                            </div>
                           )}
                         </div>
                       </div>
