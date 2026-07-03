@@ -17,7 +17,7 @@ async function startServer() {
   });
 
   // Image Upload Proxy
-  app.post("/api/upload", upload.single("file"), async (req, res) => {
+  app.post("/api/img-upload", upload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -25,7 +25,30 @@ async function startServer() {
 
       console.log(`[Server] Uploading: ${req.file.originalname} (${req.file.size} bytes)`);
 
-      // 1. PngLog
+      // 1. Catbox (Primary)
+      try {
+        const catboxFormData = new FormData();
+        catboxFormData.append("reqtype", "fileupload");
+        const catboxBlob = new Blob([req.file.buffer], { type: req.file.mimetype });
+        catboxFormData.append("fileToUpload", catboxBlob, req.file.originalname);
+
+        const catboxRes = await fetch("https://catbox.moe/user/api.php", {
+          method: "POST",
+          body: catboxFormData,
+        });
+
+        if (catboxRes.ok) {
+          const url = await catboxRes.text();
+          if (url && url.startsWith("http")) {
+            console.log("[Server] Catbox Success:", url);
+            return res.json({ url });
+          }
+        }
+      } catch (e: any) {
+        console.warn("[Server] Catbox Error:", e.message);
+      }
+
+      // 2. PngLog (Fallback)
       try {
         const formData = new FormData();
         const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
@@ -47,29 +70,6 @@ async function startServer() {
         }
       } catch (e: any) {
         console.warn("[Server] PngLog Error:", e.message);
-      }
-
-      // 2. Catbox
-      try {
-        const catboxFormData = new FormData();
-        catboxFormData.append("reqtype", "fileupload");
-        const catboxBlob = new Blob([req.file.buffer], { type: req.file.mimetype });
-        catboxFormData.append("fileToUpload", catboxBlob, req.file.originalname);
-
-        const catboxRes = await fetch("https://catbox.moe/user/api.php", {
-          method: "POST",
-          body: catboxFormData,
-        });
-
-        if (catboxRes.ok) {
-          const url = await catboxRes.text();
-          if (url && url.startsWith("http")) {
-            console.log("[Server] Catbox Success:", url);
-            return res.json({ url });
-          }
-        }
-      } catch (e: any) {
-        console.warn("[Server] Catbox Error:", e.message);
       }
 
       throw new Error("所有上传服务均不可用 (All upload services failed).");

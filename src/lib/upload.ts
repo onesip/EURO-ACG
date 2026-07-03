@@ -67,7 +67,7 @@ export const uploadToPngLog = async (rawFile: File): Promise<string> => {
   formData.append('file', file);
   
   try {
-    const res = await fetch('/api/upload', {
+    const res = await fetch('/api/img-upload', {
       method: 'POST',
       body: formData
     });
