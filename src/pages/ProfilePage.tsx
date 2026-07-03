@@ -3,7 +3,7 @@ import { useAuth } from '../components/AuthProvider';
 import { db } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { UserRole, Gender } from '../types';
-import { Save, LogIn, Sparkles, MapPin, Palette } from 'lucide-react';
+import { Save, LogIn, Sparkles, MapPin, Palette, RefreshCw } from 'lucide-react';
 import { loginWithGoogle } from '../lib/firebase';
 import ImageUpload from '../components/ImageUpload';
 import { useLanguage } from '../components/LanguageProvider';
@@ -230,14 +230,36 @@ export default function ProfilePage() {
               </div>
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
                 <ImageUpload 
-                  onUpload={(url) => setFormData({...formData, photoURL: url})} 
+                  onUpload={async (url) => {
+                    setFormData(prev => ({...prev, photoURL: url}));
+                    // Auto-save avatar for better UX
+                    if (user) {
+                      try {
+                        const docRef = doc(db, 'users', user.uid);
+                        await setDoc(docRef, { photoURL: url, updatedAt: Date.now() }, { merge: true });
+                        await refreshProfile();
+                        alert(lang === 'zh' ? '头像更新成功！' : 'Avatar updated!');
+                      } catch (e) {
+                        console.error("Avatar auto-save failed:", e);
+                      }
+                    }
+                  }} 
                   className="scale-90"
                   buttonText={lang === 'zh' ? '更换' : 'Change'}
                 />
               </div>
             </div>
             <div>
-              <h3 className="text-white font-medium">{lang === 'zh' ? '账号头像' : 'Profile Avatar'}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-white font-medium">{lang === 'zh' ? '账号头像' : 'Profile Avatar'}</h3>
+                <button 
+                  onClick={() => refreshProfile()}
+                  className="p-1 text-slate-500 hover:text-indigo-400 transition-colors"
+                  title={lang === 'zh' ? '同步云端数据' : 'Sync from cloud'}
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
+              </div>
               <p className="text-xs text-slate-400 mt-1">{lang === 'zh' ? '支持 JPG, PNG 格式' : 'Supports JPG, PNG formats'}</p>
             </div>
           </div>

@@ -23,30 +23,61 @@ async function startServer() {
         return res.status(400).json({ error: "No file uploaded" });
       }
 
-      const formData = new FormData();
-      const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
-      formData.append("file", blob, req.file.originalname);
+      console.log(`Starting upload for file: ${req.file.originalname} (${req.file.size} bytes)`);
 
-      // Using pnglog.com as the primary hosting service via server proxy
-      const response = await fetch("https://pnglog.com/api/v1/upload", {
-        method: "POST",
-        headers: {
-          "Accept": "application/json",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        },
-        body: formData,
-      });
+      // Attempt 1: PngLog
+      try {
+        const formData = new FormData();
+        const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
+        formData.append("file", blob, req.file.originalname);
 
-      const data = await response.json();
-      
-      if (data.status && data.data?.links?.url) {
-        return res.json({ url: data.data.links.url });
+        const response = await fetch("https://pnglog.com/api/v1/upload", {
+          method: "POST",
+          headers: {
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          },
+          body: formData,
+        });
+
+        const data = await response.json();
+        
+        if (data.status && data.data?.links?.url) {
+          console.log("Upload success (PngLog):", data.data.links.url);
+          return res.json({ url: data.data.links.url });
+        }
+        console.warn("PngLog failed, trying fallback provider...");
+      } catch (e: any) {
+        console.warn("PngLog error:", e.message);
       }
 
-      console.error("PngLog error response:", data);
-      throw new Error(data.message || "Upload service returned error");
+      // Attempt 2: Catbox.moe (Alternative robust provider)
+      try {
+        const catboxFormData = new FormData();
+        catboxFormData.append("reqtype", "fileupload");
+        const catboxBlob = new Blob([req.file.buffer], { type: req.file.mimetype });
+        catboxFormData.append("fileToUpload", catboxBlob, req.file.originalname);
+
+        const catboxRes = await fetch("https://catbox.moe/user/api.php", {
+          method: "POST",
+          body: catboxFormData,
+        });
+
+        if (catboxRes.ok) {
+          const url = await catboxRes.text();
+          if (url && url.startsWith("http")) {
+            console.log("Upload success (Catbox):", url);
+            return res.json({ url });
+          }
+        }
+        console.warn("Catbox fallback failed.");
+      } catch (e: any) {
+        console.warn("Catbox fallback error:", e.message);
+      }
+
+      throw new Error("所有图床服务均上传失败 (All upload providers failed)。请尝试缩小图片大小或更换图片格式（建议使用 JPG/PNG 并保持在 2MB 以内）。");
     } catch (error: any) {
-      console.error("Server upload error:", error);
+      console.error("Server upload final error:", error);
       res.status(500).json({ error: error.message || "Failed to upload image" });
     }
   });
