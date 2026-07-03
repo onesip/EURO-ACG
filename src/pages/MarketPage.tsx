@@ -124,6 +124,14 @@ export default function MarketPage() {
 
     const fetchData = async () => {
       try {
+        const cacheKey = `cached_market_posts_${selectedCountry}`;
+        const cached = loadFromCache<Post[]>(cacheKey);
+        if (cached) {
+          setPosts(cached);
+          setIsLoading(false);
+          return;
+        }
+
         const constraints: any[] = [
           where('type', '==', 'market')
         ];
@@ -155,6 +163,7 @@ export default function MarketPage() {
           return 0; // maintain Firestore orderBy order otherwise
         });
         setPosts(postsData);
+        saveToCache(cacheKey, postsData, 180000); // 3 minutes TTL
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);

@@ -129,6 +129,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
     }
 
     const fetchProfileData = async () => {
+      if (cachedProfile) return; // Skip network fetch if we have cache
       try {
         const docRef = doc(db, 'users', profileUid);
         const docSnap = await getDoc(docRef);
@@ -136,7 +137,7 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
         if (docSnap.exists()) {
           const uProfile = docSnap.data() as UserProfile;
           setProfile(uProfile);
-          saveToCache(profileCacheKey, uProfile);
+          saveToCache(profileCacheKey, uProfile, 300000); // Cache for 5 mins
         } else {
           setProfile(null);
         }
@@ -156,13 +157,15 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
 
     const fetchReviewsAndFriends = async () => {
       try {
-        // Fetch Reviews (getDocs with limit 20 instead of onSnapshot)
-        const reviewsRef = collection(db, 'users', profileUid, 'reviews');
-        const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(20));
-        const snapReviews = await getDocs(qReviews);
-        const reviewsData = snapReviews.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview);
-        setReviews(reviewsData);
-        saveToCache(reviewsCacheKey, reviewsData);
+        // Fetch Reviews only if not cached
+        if (!cachedReviews) {
+          const reviewsRef = collection(db, 'users', profileUid, 'reviews');
+          const qReviews = query(reviewsRef, orderBy('createdAt', 'desc'), limit(20));
+          const snapReviews = await getDocs(qReviews);
+          const reviewsData = snapReviews.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview);
+          setReviews(reviewsData);
+          saveToCache(reviewsCacheKey, reviewsData, 300000); // Cache for 5 mins
+        }
 
         // Check Friend Status (getDocs with limit 1 instead of onSnapshot)
         if (user && user.uid !== profileUid) {

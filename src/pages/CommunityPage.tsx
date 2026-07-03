@@ -149,6 +149,15 @@ export default function CommunityPage() {
 
     const fetchData = async () => {
       try {
+        const cacheKey = `cached_community_posts_${activeTab}_${activeSubCategory}_${selectedCountry}`;
+        const cached = loadFromCache<Post[]>(cacheKey);
+        if (cached) {
+          setPosts(cached);
+          setIsLoading(false);
+          // Return early to save network costs
+          return;
+        }
+
         const constraints: any[] = [
           where("type", "==", activeTab)
         ];
@@ -185,6 +194,7 @@ export default function CommunityPage() {
         });
 
         setPosts(sortedPosts);
+        saveToCache(cacheKey, sortedPosts, 180000); // Cache for 3 minutes
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);

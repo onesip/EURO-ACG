@@ -41,9 +41,13 @@ export function restoreTimestamps<T>(data: any): T {
   return data;
 }
 
-export function saveToCache(key: string, data: any): void {
+export function saveToCache(key: string, data: any, ttlMs: number = 300000): void {
   try {
-    localStorage.setItem(key, JSON.stringify(data));
+    const payload = {
+      data,
+      expiresAt: Date.now() + ttlMs,
+    };
+    localStorage.setItem(key, JSON.stringify(payload));
   } catch (e) {
     console.error(`Failed to save cache for key ${key}:`, e);
   }
@@ -54,6 +58,17 @@ export function loadFromCache<T>(key: string): T | null {
     const cached = localStorage.getItem(key);
     if (!cached) return null;
     const parsed = JSON.parse(cached);
+    
+    // Check if it's using the new TTL format
+    if (parsed && typeof parsed.expiresAt === 'number') {
+      if (Date.now() > parsed.expiresAt) {
+        localStorage.removeItem(key);
+        return null;
+      }
+      return restoreTimestamps<T>(parsed.data);
+    }
+    
+    // Fallback for old cache formats without TTL
     return restoreTimestamps<T>(parsed);
   } catch (e) {
     console.error(`Failed to load cache for key ${key}:`, e);

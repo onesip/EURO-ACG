@@ -30,6 +30,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
 
     const fetchData = async () => {
       if (isQuotaExceeded()) return;
+      if (cached) return; // Skip network fetch if we have cache
       try {
         const q = query(collection(db, parentCollection, parentId, 'comments'), orderBy('createdAt', 'desc'), limit(20));
         const snapshot = await getDocs(q);
@@ -44,7 +45,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
           return aTime - bTime;
         });
         setComments(commentsData);
-        saveToCache(cacheKey, commentsData);
+        saveToCache(cacheKey, commentsData, 180000); // Cache for 3 minutes
       } catch (error: any) {
         if (error?.code === 'resource-exhausted') {
           setQuotaExceeded(true);

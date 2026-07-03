@@ -58,6 +58,14 @@ export default function ActivitiesPage() {
 
     const fetchData = async () => {
       try {
+        const cacheKey = `cached_activities_${selectedCountry}`;
+        const cached = loadFromCache<Activity[]>(cacheKey);
+        if (cached) {
+          setActivities(cached);
+          setIsLoading(false);
+          return;
+        }
+
         const constraints: any[] = [];
 
         if (selectedCountry !== 'ALL') {
@@ -88,6 +96,7 @@ export default function ActivitiesPage() {
         });
 
         setActivities(activitiesData);
+        saveToCache(cacheKey, activitiesData, 180000); // Cache for 3 minutes
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);

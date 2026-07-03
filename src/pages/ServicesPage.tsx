@@ -124,6 +124,14 @@ export default function ServicesPage() {
 
     const fetchData = async () => {
       try {
+        const cacheKey = `cached_services_${activeTab}_${selectedCountry}`;
+        const cached = loadFromCache<ServiceAd[]>(cacheKey);
+        if (cached) {
+          setAds(cached);
+          setIsLoading(false);
+          return;
+        }
+
         const constraints: any[] = [
           where('type', '==', activeTab)
         ];
@@ -155,6 +163,7 @@ export default function ServicesPage() {
           return 0; // maintain Firestore orderBy order otherwise
         });
         setAds(adsData);
+        saveToCache(cacheKey, adsData, 180000); // 3 minutes TTL
       } catch (error: any) {
         if (error?.code === 'failed-precondition') {
           setIndexRequired(true);

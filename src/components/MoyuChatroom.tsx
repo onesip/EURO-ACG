@@ -93,6 +93,7 @@ export default function MoyuChatroom() {
         const cached = loadFromCache<any[]>(cacheKey);
         if (cached) {
           setFriendsList(cached);
+          return; // Skip network fetch
         }
 
         const friendsRef = collection(db, 'users', user.uid, 'friends');
@@ -101,6 +102,7 @@ export default function MoyuChatroom() {
 
         if (friendIds.length === 0) {
           setFriendsList([]);
+          saveToCache(cacheKey, [], 180000); // Cache empty array
           return;
         }
 
@@ -121,7 +123,7 @@ export default function MoyuChatroom() {
               const uSnap = await getDoc(doc(db, 'users', friendUid));
               if (uSnap.exists()) {
                 const uData = uSnap.data() as UserProfile;
-                saveToCache(`cached_user_profile_${friendUid}`, uData);
+                saveToCache(`cached_user_profile_${friendUid}`, uData, 300000);
                 return {
                   uid: friendUid,
                   displayName: uData.displayName || 'Moyu Friend',
@@ -143,7 +145,7 @@ export default function MoyuChatroom() {
         );
 
         setFriendsList(fetchedFriends);
-        saveToCache(cacheKey, fetchedFriends);
+        saveToCache(cacheKey, fetchedFriends, 180000);
       } catch (err: any) {
         console.error("Error fetching friends list:", err);
       }
