@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './components/AuthProvider';
 import { LanguageProvider } from './components/LanguageProvider';
 import { ThemeProvider } from './components/ThemeProvider';

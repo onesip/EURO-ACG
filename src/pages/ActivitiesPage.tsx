@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
 import { useLanguage } from '../components/LanguageProvider';
@@ -6,12 +7,13 @@ import CommentSection from '../components/CommentSection';
 import LocationInput from '../components/LocationInput';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
+import ShareButton from '../components/ShareButton';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
 import { Activity } from '../types';
 import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin, AlertCircle } from 'lucide-react';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
-import { collection, addDoc, serverTimestamp, updateDoc, doc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, updateDoc, doc, getDoc, query, orderBy, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { cn } from '../lib/utils';
 import { loadFromCache, saveToCache } from '../lib/cache';
@@ -38,10 +40,13 @@ export default function ActivitiesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [joiningNoteId, setJoiningNoteId] = useState<string | null>(null);
+  const [participantNote, setParticipantNote] = useState('');
   const [indexRequired, setIndexRequired] = useState(false);
   const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
+  const location = useLocation();
 
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
@@ -51,7 +56,10 @@ export default function ActivitiesPage() {
     setIsLoading(true);
 
     const fetchData = async () => {
-      if (!user && EMERGENCY_GUEST_FIRESTORE_OFF) {
+      const queryParams = new URLSearchParams(location.search);
+      const sharedId = queryParams.get('id');
+
+      if (!user && EMERGENCY_GUEST_FIRESTORE_OFF && !sharedId) {
         setActivities([]);
         setIsLoading(false);
         return;
@@ -79,6 +87,20 @@ export default function ActivitiesPage() {
           id: doc.id,
           ...doc.data()
         })) as Activity[];
+
+        if (sharedId) {
+          const exists = activitiesData.find(a => a.id === sharedId);
+          if (!exists) {
+            try {
+              const sharedDoc = await getDoc(doc(db, 'activities', sharedId));
+              if (sharedDoc.exists()) {
+                activitiesData.unshift({ id: sharedDoc.id, ...sharedDoc.data() } as Activity);
+              }
+            } catch (err) {
+              console.error("Failed to fetch shared activity:", err);
+            }
+          }
+        }
         
         // Sort: Pinned first, keeping the rest in order of createdAt desc
         activitiesData.sort((a, b) => {
@@ -128,10 +150,16 @@ export default function ActivitiesPage() {
     }
   };
 
-  const handleJoin = async (activityId: string, isJoining: boolean) => {
+  const handleJoin = async (activityId: string, isJoining: boolean, note?: string) => {
     if (!user || !profile) return alert('Please login to join activities');
     
-    const participant = { uid: user.uid, role: profile.role, displayName: profile.displayName, photoURL: profile.photoURL };
+    const participant = { 
+      uid: user.uid, 
+      role: profile.role, 
+      displayName: profile.displayName, 
+      photoURL: profile.photoURL,
+      notes: note || '' 
+    };
     
     const activity = activities.find(a => a.id === activityId);
     if (!activity) return;
@@ -164,6 +192,8 @@ export default function ActivitiesPage() {
           });
         }
       }
+      setJoiningNoteId(null);
+      setParticipantNote('');
     } catch (error: any) {
       console.error("Error joining activity:", error);
       if (error?.code === 'resource-exhausted') {
@@ -297,8 +327,22 @@ export default function ActivitiesPage() {
               <div className="mb-4">
                 <PostContent content={activity.description} />
               </div>
+
+              {activity.link && (
+                <div className="mb-4 p-3 bg-white/5 border border-white/10 rounded-xl flex items-center gap-2 group/link">
+                  <Globe className="w-4 h-4 text-indigo-400" />
+                  <a 
+                    href={activity.link} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-indigo-400 hover:text-indigo-300 underline break-all font-medium"
+                  >
+                    {activity.link}
+                  </a>
+                </div>
+              )}
               
-              <div className="flex flex-wrap gap-4 text-sm text-slate-400 mb-4">
+              <div className="flex flex-wrap gap-4 text-sm text-slate-400 mb-6">
                 <div className="flex items-center gap-1.5">
                   <CalendarIcon className="w-4 h-4 text-slate-400" />
                   {activity.date}
@@ -312,6 +356,59 @@ export default function ActivitiesPage() {
                   {activity.participants?.length || 0} {t('act.participants')}
                 </div>
               </div>
+
+              {/* Participants Solitaire Style */}
+              {(activity.participants?.length || 0) > 0 && (
+                <div className="mb-6 space-y-2">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                      {lang === 'zh' ? '接龙上车名单' : 'Participant Solitaire'}
+                    </span>
+                    <span className="text-[10px] font-medium text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full">
+                      {activity.participants?.length} {lang === 'zh' ? '人已上车' : 'Joined'}
+                    </span>
+                  </div>
+                  <div className="bg-black/20 rounded-2xl border border-white/5 divide-y divide-white/5">
+                    {activity.participants?.map((p, i) => (
+                      <div key={i} className="p-3 flex items-start gap-3 group/participant">
+                        <div className="relative">
+                          <UserAvatar 
+                            uid={p.uid} 
+                            photoURL={p.photoURL} 
+                            displayName={p.displayName} 
+                            size="sm" 
+                            showGender={false}
+                            className="border border-white/10"
+                            onClick={() => showProfile(p.uid, { displayName: p.displayName, photoURL: p.photoURL })}
+                          />
+                          <div className="absolute -top-1 -left-1 w-4 h-4 bg-slate-800 border border-white/10 rounded-full flex items-center justify-center text-[9px] font-bold text-slate-400">
+                            {i + 1}
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={cn(
+                              "text-xs font-bold truncate",
+                              p.uid === user?.uid ? "text-indigo-400" : "text-white"
+                            )}>
+                              {p.displayName}
+                              {p.uid === user?.uid && (lang === 'zh' ? ' (我)' : ' (Me)')}
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-medium px-1.5 py-0.5 bg-white/5 rounded capitalize">
+                              {p.role}
+                            </span>
+                          </div>
+                          {p.notes && (
+                            <p className="text-[11px] text-slate-400 mt-0.5 italic leading-relaxed">
+                              "{p.notes}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-4">
                 <div className="flex -space-x-2 overflow-hidden">
@@ -411,17 +508,55 @@ export default function ActivitiesPage() {
                     )}
                   </div>
 
-                  <button
-                    onClick={() => handleJoin(activity.id, !isParticipant)}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
-                      isParticipant 
-                        ? 'bg-white/5 text-slate-300 hover:bg-white/10' 
-                        : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
-                    }`}
-                  >
-                    {isParticipant ? t('act.cancelJoin') : t('act.join')}
-                    ({activity.commentCount ?? 0})
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {joiningNoteId === activity.id ? (
+                      <div className="flex items-center gap-2 animate-fadeIn">
+                        <input
+                          type="text"
+                          value={participantNote}
+                          autoFocus
+                          onChange={(e) => setParticipantNote(e.target.value)}
+                          placeholder={lang === 'zh' ? '写个备注(如角色)...' : 'Note (e.g. character)...'}
+                          className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white outline-none focus:ring-1 focus:ring-indigo-500 w-32 sm:w-48"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleJoin(activity.id, true, participantNote);
+                            if (e.key === 'Escape') setJoiningNoteId(null);
+                          }}
+                        />
+                        <button
+                          onClick={() => handleJoin(activity.id, true, participantNote)}
+                          className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => setJoiningNoteId(null)}
+                          className="p-2 text-slate-400 hover:text-white"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (isParticipant) {
+                            handleJoin(activity.id, false);
+                          } else {
+                            setJoiningNoteId(activity.id);
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${
+                          isParticipant 
+                            ? 'bg-white/5 text-slate-300 hover:bg-white/10' 
+                            : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20'
+                        }`}
+                      >
+                        {isParticipant ? t('act.cancelJoin') : t('act.join')}
+                        ({activity.commentCount ?? 0})
+                      </button>
+                    )}
+                    <ShareButton path="" id={activity.id} title={activity.title} />
+                  </div>
                 </div>
               
               <CommentSection parentCollection="activities" parentId={activity.id} />

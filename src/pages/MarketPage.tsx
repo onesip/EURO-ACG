@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
-import { collection, query, orderBy, addDoc, serverTimestamp, where, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, where, doc, getDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -9,6 +10,7 @@ import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
+import ShareButton from '../components/ShareButton';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
 import { Post } from '../types';
@@ -27,6 +29,7 @@ export default function MarketPage() {
   const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
+  const location = useLocation();
 
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
@@ -117,7 +120,10 @@ export default function MarketPage() {
     setIsLoading(true);
 
     const fetchData = async () => {
-      if (!user && EMERGENCY_GUEST_FIRESTORE_OFF) {
+      const queryParams = new URLSearchParams(location.search);
+      const sharedId = queryParams.get('id');
+
+      if (!user && EMERGENCY_GUEST_FIRESTORE_OFF && !sharedId) {
         setPosts([]);
         setIsLoading(false);
         return;
@@ -147,6 +153,20 @@ export default function MarketPage() {
           id: doc.id,
           ...doc.data()
         })) as Post[];
+
+        if (sharedId) {
+          const exists = postsData.find(a => a.id === sharedId);
+          if (!exists) {
+            try {
+              const sharedDoc = await getDoc(doc(db, 'posts', sharedId));
+              if (sharedDoc.exists()) {
+                postsData.unshift({ id: sharedDoc.id, ...sharedDoc.data() } as Post);
+              }
+            } catch (err) {
+              console.error("Failed to fetch shared market post:", err);
+            }
+          }
+        }
         
         // Sort: Pinned first, keeping rest in order of createdAt desc
         postsData.sort((a, b) => {
@@ -284,6 +304,7 @@ export default function MarketPage() {
                   >
                     {t('mkt.contact')} ({post.commentCount ?? 0})
                   </button>
+                  <ShareButton path="market" id={post.id} title={post.title || (lang === 'zh' ? '分享二手物品' : 'Share Market Item')} />
                 </div>
               </div>
             </div>

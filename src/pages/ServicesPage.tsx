@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
-import { collection, query, orderBy, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../components/AuthProvider';
@@ -9,6 +10,7 @@ import CommentSection from '../components/CommentSection';
 import PostContent from '../components/PostContent';
 import ImageUpload from '../components/ImageUpload';
 import EmbeddedMedia from '../components/EmbeddedMedia';
+import ShareButton from '../components/ShareButton';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
 import { ServiceAd, ServiceType } from '../types';
@@ -49,6 +51,7 @@ export default function ServicesPage() {
   const { user, profile, setQuotaExceeded, isQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
+  const location = useLocation();
 
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
@@ -117,7 +120,10 @@ export default function ServicesPage() {
     setIsLoading(true);
 
     const fetchData = async () => {
-      if (!user && EMERGENCY_GUEST_FIRESTORE_OFF) {
+      const queryParams = new URLSearchParams(location.search);
+      const sharedId = queryParams.get('id');
+
+      if (!user && EMERGENCY_GUEST_FIRESTORE_OFF && !sharedId) {
         setAds([]);
         setIsLoading(false);
         return;
@@ -147,6 +153,20 @@ export default function ServicesPage() {
           id: doc.id,
           ...doc.data()
         })) as ServiceAd[];
+
+        if (sharedId) {
+          const exists = adsData.find(a => a.id === sharedId);
+          if (!exists) {
+            try {
+              const sharedDoc = await getDoc(doc(db, 'services', sharedId));
+              if (sharedDoc.exists()) {
+                adsData.unshift({ id: sharedDoc.id, ...sharedDoc.data() } as ServiceAd);
+              }
+            } catch (err) {
+              console.error("Failed to fetch shared service:", err);
+            }
+          }
+        }
         
         // Sort: Pinned first, keeping rest in order of createdAt desc
         adsData.sort((a, b) => {
@@ -353,9 +373,11 @@ export default function ServicesPage() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleSupport(ad.id, ad.supports)}
-                  className={cn(
+                <div className="flex items-center gap-2">
+                  <ShareButton path="services" id={ad.id} title={lang === 'zh' ? '分享服务' : 'Share Service'} />
+                  <button
+                    onClick={() => handleSupport(ad.id, ad.supports)}
+                    className={cn(
                     "px-4 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 border",
                     user && ad.supports?.includes(user.uid)
                       ? "bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 border-amber-600 font-extrabold"
@@ -365,6 +387,7 @@ export default function ServicesPage() {
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>{user && ad.supports?.includes(user.uid) ? (lang === 'zh' ? '已支持' : 'Supported') : (lang === 'zh' ? '点赞支持' : 'Support')}</span>
                 </button>
+                </div>
               </div>
               
               {/* Edit/Delete Actions */}
