@@ -9,28 +9,36 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
   });
 
-  // Image Upload Proxy
-  app.post("/api/img-upload", upload.single("file"), async (req, res) => {
+  // Image Upload Proxy (Base64 JSON approach for better mobile/proxy compatibility)
+  app.post("/api/upload-base64", async (req, res) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
+      const { image, filename, contentType } = req.body;
+      
+      if (!image) {
+        return res.status(400).json({ error: "No image data provided" });
       }
 
-      console.log(`[Server] Uploading: ${req.file.originalname} (${req.file.size} bytes)`);
+      // Remove header if present (e.g. data:image/jpeg;base64,)
+      const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, 'base64');
+      const name = filename || 'upload.jpg';
+      const type = contentType || 'image/jpeg';
 
-      // 1. Catbox (Primary)
+      console.log(`[Upload] Received Base64 image: ${name} (${buffer.length} bytes)`);
+
+      // 1. Try Catbox (High reliability)
       try {
         const catboxFormData = new FormData();
         catboxFormData.append("reqtype", "fileupload");
-        const catboxBlob = new Blob([req.file.buffer], { type: req.file.mimetype });
-        catboxFormData.append("fileToUpload", catboxBlob, req.file.originalname);
+        const catboxBlob = new Blob([buffer], { type });
+        catboxFormData.append("fileToUpload", catboxBlob, name);
 
         const catboxRes = await fetch("https://catbox.moe/user/api.php", {
           method: "POST",
@@ -40,41 +48,41 @@ async function startServer() {
         if (catboxRes.ok) {
           const url = await catboxRes.text();
           if (url && url.startsWith("http")) {
-            console.log("[Server] Catbox Success:", url);
+            console.log("[Upload] Catbox Success:", url);
             return res.json({ url });
           }
         }
-      } catch (e: any) {
-        console.warn("[Server] Catbox Error:", e.message);
+      } catch (e) {
+        console.warn("[Upload] Catbox failed");
       }
 
-      // 2. PngLog (Fallback)
+      // 2. Fallback to PngLog
       try {
         const formData = new FormData();
-        const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
-        formData.append("file", blob, req.file.originalname);
+        const blob = new Blob([buffer], { type });
+        formData.append("file", blob, name);
 
         const response = await fetch("https://pnglog.com/api/v1/upload", {
           method: "POST",
           headers: {
             "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0"
           },
           body: formData,
         });
 
         const data = await response.json();
         if (data.status && data.data?.links?.url) {
-          console.log("[Server] PngLog Success:", data.data.links.url);
+          console.log("[Upload] PngLog Success:", data.data.links.url);
           return res.json({ url: data.data.links.url });
         }
-      } catch (e: any) {
-        console.warn("[Server] PngLog Error:", e.message);
+      } catch (e) {
+        console.warn("[Upload] PngLog failed");
       }
 
-      throw new Error("所有上传服务均不可用 (All upload services failed).");
+      throw new Error("所有上传服务暂时不可用，请稍后再试 (All upload services failed)");
     } catch (error: any) {
-      console.error("[Server] Final Upload Error:", error);
+      console.error("[Upload] Final Error:", error);
       res.status(500).json({ error: error.message || "Upload failed" });
     }
   });

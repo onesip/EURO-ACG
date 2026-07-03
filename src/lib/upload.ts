@@ -63,13 +63,27 @@ export const uploadToPngLog = async (rawFile: File): Promise<string> => {
   // Compress image on client side first to save bandwidth and avoid size-limit issues
   const file = await compressImage(rawFile);
 
-  const formData = new FormData();
-  formData.append('file', file);
-  
+  // Convert to Base64
+  const toBase64 = (f: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(f);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+  });
+
   try {
-    const res = await fetch('/api/img-upload', {
+    const base64Image = await toBase64(file);
+    
+    const res = await fetch('/api/upload-base64', {
       method: 'POST',
-      body: formData
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        image: base64Image,
+        filename: file.name,
+        contentType: file.type
+      })
     });
     
     if (!res.ok) {
