@@ -14,6 +14,7 @@ import { Post, PostType } from '../types';
 import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { loadFromCache, saveToCache } from '../lib/cache';
+import MoyuChatroom from '../components/MoyuChatroom';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
@@ -25,6 +26,8 @@ const EUROPEAN_COUNTRIES = [
   { id: 'ES', name: '西班牙', flag: '🇪🇸', en: 'Spain' },
   { id: 'CH', name: '瑞士', flag: '🇨🇭', en: 'Switzerland' },
   { id: 'AT', name: '奥地利', flag: '🇦🇹', en: 'Austria' },
+  { id: 'FI', name: '芬兰', flag: '🇫🇮', en: 'Finland' },
+  { id: 'RU', name: '俄罗斯', flag: '🇷🇺', en: 'Russia' },
   { id: 'OTHER', name: '其他地区', flag: '🇪🇺', en: 'Other' },
 ];
 
@@ -39,6 +42,7 @@ export default function CommunityPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<PostType>('social');
+  const [viewMode, setViewMode] = useState<'posts' | 'chat'>('posts');
   const [activeSubCategory, setActiveSubCategory] = useState<string>('all');
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
@@ -214,31 +218,67 @@ export default function CommunityPage() {
           <h1 className="text-3xl font-bold tracking-tight text-white">{t('com.title')}</h1>
           <p className="text-slate-400 mt-1">{t('com.subtitle')}</p>
         </div>
+        {viewMode === 'posts' && (
+          <button
+            onClick={() => setIsComposeOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium shadow-sm"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="hidden sm:inline">{t('com.new')}</span>
+          </button>
+        )}
+      </div>
+
+      {/* View Mode Selector: Posts vs Chatroom */}
+      <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5 max-w-sm">
         <button
-          onClick={() => setIsComposeOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium shadow-sm"
+          onClick={() => setViewMode('posts')}
+          className={cn(
+            "flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5",
+            viewMode === 'posts' 
+              ? "bg-indigo-600 text-white shadow-lg" 
+              : "text-slate-400 hover:text-slate-200"
+          )}
         >
-          <Plus className="w-5 h-5" />
-          <span className="hidden sm:inline">{t('com.new')}</span>
+          📝 {lang === 'zh' ? '摸鱼论坛帖子' : 'Forums'}
+        </button>
+        <button
+          onClick={() => setViewMode('chat')}
+          className={cn(
+            "flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 relative overflow-hidden",
+            viewMode === 'chat' 
+              ? "bg-gradient-to-r from-pink-600 to-indigo-600 text-white shadow-lg border border-pink-500/20" 
+              : "text-slate-400 hover:text-slate-200"
+          )}
+        >
+          💬 {lang === 'zh' ? '二次元聊天室' : 'ACG Live Chat'}
+          <span className="absolute top-1 right-2 flex h-1.5 w-1.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pink-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-pink-500"></span>
+          </span>
         </button>
       </div>
 
-      {indexRequired && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-400 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <p className="text-sm">
-            {lang === 'zh' 
-              ? '需要创建 Firestore 复合索引以支持当前筛选。请在 Firebase 控制台创建对应的 Index。' 
-              : 'Firestore composite index is required for this query. Please create it in your Firebase Console.'}
-          </p>
-        </div>
-      )}
+      {viewMode === 'chat' ? (
+        <MoyuChatroom />
+      ) : (
+        <>
+          {indexRequired && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-400 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 shrink-0" />
+              <p className="text-sm">
+                {lang === 'zh' 
+                  ? '需要创建 Firestore 复合索引以支持当前筛选。请在 Firebase 控制台创建对应的 Index。' 
+                  : 'Firestore composite index is required for this query. Please create it in your Firebase Console.'}
+              </p>
+            </div>
+          )}
 
-      <div className="space-y-2">
-        <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
-          {lang === 'zh' ? '🌍 圈子过滤 / 切换国家频道' : '🌍 Region Circles / Country Channels'}
-        </label>
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 block">
+              {lang === 'zh' ? '🌍 圈子过滤 / 切换国家频道' : '🌍 Region Circles / Country Channels'}
+            </label>
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
           <button
             onClick={() => setSelectedCountry('ALL')}
             className={`px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
@@ -521,6 +561,8 @@ export default function CommunityPage() {
           </p>
         </div>
       )}
+      </>
+    )}
 
       {(isComposeOpen || editingPost) && (
         <ComposeModal 
@@ -546,13 +588,15 @@ export default function CommunityPage() {
       )}
 
       {/* Mobile Floating Action Button */}
-      <button
-        onClick={() => setIsComposeOpen(true)}
-        className="md:hidden fixed bottom-24 right-5 z-40 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white p-4 rounded-full shadow-[0_8px_24px_rgba(99,102,241,0.5)] transition-all flex items-center justify-center border border-white/10"
-        title={t('com.new')}
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {viewMode === 'posts' && (
+        <button
+          onClick={() => setIsComposeOpen(true)}
+          className="md:hidden fixed bottom-24 right-5 z-40 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white p-4 rounded-full shadow-[0_8px_24px_rgba(99,102,241,0.5)] transition-all flex items-center justify-center border border-white/10"
+          title={t('com.new')}
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
     </div>
   );
 }

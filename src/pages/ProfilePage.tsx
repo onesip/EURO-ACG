@@ -20,6 +20,8 @@ const EUROPEAN_COUNTRIES = [
   { id: 'ES', name: '西班牙 (Spain)' },
   { id: 'CH', name: '瑞士 (Switzerland)' },
   { id: 'AT', name: '奥地利 (Austria)' },
+  { id: 'FI', name: '芬兰 (Finland)' },
+  { id: 'RU', name: '俄罗斯 (Russia)' },
   { id: 'OTHER', name: '其他地区 (Other)' },
 ];
 

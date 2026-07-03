@@ -26,6 +26,8 @@ const EUROPEAN_COUNTRIES = [
   { id: 'ES', name: '西班牙', flag: '🇪🇸', en: 'Spain' },
   { id: 'CH', name: '瑞士', flag: '🇨🇭', en: 'Switzerland' },
   { id: 'AT', name: '奥地利', flag: '🇦🇹', en: 'Austria' },
+  { id: 'FI', name: '芬兰', flag: '🇫🇮', en: 'Finland' },
+  { id: 'RU', name: '俄罗斯', flag: '🇷🇺', en: 'Russia' },
   { id: 'OTHER', name: '其他地区', flag: '🇪🇺', en: 'Other' },
 ];
 
