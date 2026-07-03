@@ -1,13 +1,54 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
+import multer from "multer";
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  // Image Upload Proxy
+  app.post("/api/upload", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const formData = new FormData();
+      const blob = new Blob([req.file.buffer], { type: req.file.mimetype });
+      formData.append("file", blob, req.file.originalname);
+
+      // Using pnglog.com as the primary hosting service via server proxy
+      const response = await fetch("https://pnglog.com/api/v1/upload", {
+        method: "POST",
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      
+      if (data.status && data.data?.links?.url) {
+        return res.json({ url: data.data.links.url });
+      }
+
+      console.error("PngLog error response:", data);
+      throw new Error(data.message || "Upload service returned error");
+    } catch (error: any) {
+      console.error("Server upload error:", error);
+      res.status(500).json({ error: error.message || "Failed to upload image" });
+    }
   });
 
   app.get("/api/metadata", async (req, res) => {

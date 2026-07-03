@@ -66,33 +66,26 @@ export const uploadToPngLog = async (rawFile: File): Promise<string> => {
   const formData = new FormData();
   formData.append('file', file);
   
-  // You can set VITE_PNGLOG_TOKEN in .env if an API token is required
-  // @ts-ignore
-  const token = import.meta.env.VITE_PNGLOG_TOKEN;
-  const headers: Record<string, string> = {
-    'Accept': 'application/json'
-  };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   try {
-    const res = await fetch('https://pnglog.com/api/v1/upload', {
+    const res = await fetch('/api/upload', {
       method: 'POST',
-      headers,
       body: formData
     });
     
-    const json = await res.json();
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.error || `Server error: ${res.status}`);
+    }
+
+    const data = await res.json();
     
-    if (json.status && json.data && json.data.links && json.data.links.url) {
-      return json.data.links.url;
+    if (data.url) {
+      return data.url;
     }
     
-    throw new Error(json.message || 'Image upload failed');
-  } catch (error) {
-    console.error('PngLog Upload Error:', error);
-    throw new Error('Image upload failed. Please try again later.');
+    throw new Error('Image upload failed: No URL returned');
+  } catch (error: any) {
+    console.error('Upload Error:', error);
+    throw new Error(error.message || 'Image upload failed. Please try again later.');
   }
 };
