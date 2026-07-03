@@ -47,6 +47,8 @@ export default function ActivitiesPage() {
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
   const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const sharedId = queryParams.get('id');
 
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
@@ -89,16 +91,21 @@ export default function ActivitiesPage() {
         })) as Activity[];
 
         if (sharedId) {
-          const exists = activitiesData.find(a => a.id === sharedId);
-          if (!exists) {
-            try {
-              const sharedDoc = await getDoc(doc(db, 'activities', sharedId));
-              if (sharedDoc.exists()) {
-                activitiesData.unshift({ id: sharedDoc.id, ...sharedDoc.data() } as Activity);
+          // If we have a shared ID, we prioritize showing ONLY that item 
+          // or showing it at the top if it's not in the main list
+          try {
+            const sharedDoc = await getDoc(doc(db, 'activities', sharedId));
+            if (sharedDoc.exists()) {
+              const sharedItem = { id: sharedDoc.id, ...sharedDoc.data() } as Activity;
+              // If it's already in the list, move it to top
+              const existingIndex = activitiesData.findIndex(a => a.id === sharedId);
+              if (existingIndex !== -1) {
+                activitiesData.splice(existingIndex, 1);
               }
-            } catch (err) {
-              console.error("Failed to fetch shared activity:", err);
+              activitiesData.unshift(sharedItem);
             }
+          } catch (err) {
+            console.error("Failed to fetch shared activity:", err);
           }
         }
         
@@ -206,21 +213,56 @@ export default function ActivitiesPage() {
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">{t('act.title')}</h1>
-          <p className="text-slate-400 mt-1">{t('act.subtitle')}</p>
+          <h1 className="text-3xl font-black text-white tracking-tight flex items-center gap-3 uppercase">
+            {sharedId ? (lang === 'zh' ? '面基行动详情' : 'Activity Detail') : t('act.title')}
+            <span className="text-indigo-500">.</span>
+          </h1>
+          <p className="text-slate-400 mt-1 text-sm font-medium">
+            {sharedId ? (lang === 'zh' ? '正在查看特定活动，点击下方按钮查看更多' : 'Viewing a specific activity, click button below to see more') : t('act.subtitle')}
+          </p>
         </div>
-        {user && (
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium shadow-sm"
-          >
-            <Plus className="w-5 h-5" />
-            <span className="hidden sm:inline">{t('act.new')}</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {sharedId && (
+            <button
+              onClick={() => {
+                window.location.hash = window.location.hash.split('?')[0];
+              }}
+              className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl font-bold transition-all flex items-center gap-2 border border-white/10 active:scale-95"
+            >
+              <Globe className="w-4 h-4" />
+              {lang === 'zh' ? '查看全部' : 'View All'}
+            </button>
+          )}
+          {user && (
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all font-bold shadow-lg shadow-indigo-500/20 active:scale-95"
+            >
+              <Plus className="w-5 h-5" />
+              <span>{t('act.new')}</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Shared ID Highlight Alert */}
+      {sharedId && activities.length > 0 && activities[0].id === sharedId && (
+        <div className="p-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl animate-pulse shadow-xl shadow-indigo-500/10">
+          <div className="bg-slate-950 px-5 py-4 rounded-[22px] flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                <Sparkles className="w-6 h-6 text-indigo-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-white uppercase tracking-tight">{lang === 'zh' ? '为您直达此活动' : 'Direct link to this activity'}</h3>
+                <p className="text-xs text-slate-400 font-medium">{lang === 'zh' ? '已成功加载分享的内容，您可以查看详情或参与讨论' : 'The shared content has been loaded successfully'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!user && EMERGENCY_GUEST_FIRESTORE_OFF ? (
         <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-3xl p-8 text-center max-w-2xl mx-auto my-12 shadow-2xl">
@@ -555,7 +597,7 @@ export default function ActivitiesPage() {
                         ({activity.commentCount ?? 0})
                       </button>
                     )}
-                    <ShareButton path="" id={activity.id} title={activity.title} />
+                    <ShareButton path="" id={activity.id} title={lang === 'zh' ? `团咪开团我秒跟：${activity.title}` : `Join my activity: ${activity.title}`} />
                   </div>
                 </div>
               
