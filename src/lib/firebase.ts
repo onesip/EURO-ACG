@@ -51,6 +51,7 @@ export const loginWithGoogle = async () => {
     const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
     
     if (isWeChat) {
+      alert("⚠️ 微信登录提示:\n检测到您在微信内访问。Google 登录需要弹出窗口或重定向，微信可能会拦截。\n\n如果点击确认后没有反应或登录失败，请点击右上角 [...] 并选择 「在浏览器中打开」。");
       await signInWithRedirect(auth, googleProvider);
       return;
     }
@@ -59,6 +60,10 @@ export const loginWithGoogle = async () => {
   } catch (error: any) {
     console.error("Firebase Auth Google Error:", error);
     if (error.code === 'auth/popup-blocked') {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+      if (isMobile) {
+        alert("提示: 登录窗口被拦截。我们将使用重定向方式登录。\n\n如果登录后返回界面仍未登录，请确保您的浏览器允许第三方 Cookie，或尝试在系统自带浏览器(如 Safari/Chrome)中打开。");
+      }
       // Fallback to redirect if popup is blocked
       await signInWithRedirect(auth, googleProvider);
       return;

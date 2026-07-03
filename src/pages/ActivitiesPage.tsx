@@ -278,18 +278,27 @@ export default function ActivitiesPage() {
 
       {/* Shared ID Highlight Alert */}
       {sharedId && activities.length > 0 && activities[0].id === sharedId && (
-        <div className="p-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl animate-pulse shadow-xl shadow-indigo-500/10">
-          <div className="bg-slate-950 px-5 py-4 rounded-[22px] flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
-                <Sparkles className="w-6 h-6 text-indigo-400" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-white uppercase tracking-tight">{lang === 'zh' ? '为您直达此活动' : 'Direct link to this activity'}</h3>
-                <p className="text-xs text-slate-400 font-medium">{lang === 'zh' ? '已成功加载分享的内容，您可以查看详情或参与讨论' : 'The shared content has been loaded successfully'}</p>
+        <div className="space-y-4">
+          <div className="p-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl animate-pulse shadow-xl shadow-indigo-500/10">
+            <div className="bg-slate-950 px-5 py-4 rounded-[22px] flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30">
+                  <Sparkles className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-tight">{lang === 'zh' ? '为您直达此活动' : 'Direct link to this activity'}</h3>
+                  <p className="text-xs text-slate-400 font-medium">{lang === 'zh' ? '已成功加载分享的内容，您可以查看详情或参与讨论' : 'The shared content has been loaded successfully'}</p>
+                </div>
               </div>
             </div>
           </div>
+          
+          {/MicroMessenger/i.test(navigator.userAgent) && !user && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-xs text-amber-300 leading-relaxed">
+              <p className="font-bold mb-1">💡 微信用户提示:</p>
+              <p>如果您尝试 Google 登录却失败，是因为微信禁用了相关弹出窗口。请点击右上角 <span className="font-bold font-mono">[...]</span> 并选择 <span className="font-bold underline">「在浏览器中打开」</span> 即可完美登录并保留活动进度。</p>
+            </div>
+          )}
         </div>
       )}
 

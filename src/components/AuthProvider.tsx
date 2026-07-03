@@ -121,26 +121,42 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     }
 
-    const checkRedirect = async () => {
+    let isMounted = true;
+
+    const initAuth = async () => {
       try {
-        await getRedirectResult(auth);
+        const result = await getRedirectResult(auth);
+        if (result && isMounted) {
+          console.log("Successfully logged in via redirect:", result.user.email);
+        }
       } catch (err: any) {
         console.error("Redirect Login Error:", err);
+        if (err.code && err.code !== 'auth/no-current-user' && isMounted) {
+          alert(`登录重定向出错 (Redirect Error): ${err.message}\n\n💡 建议: 请确保您的域名已在 Firebase 控制台授权，并尝试在纯净浏览器环境(非微信内部)打开。`);
+        }
       }
+
+      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+        if (!isMounted) return;
+        
+        setUser(currentUser);
+        if (currentUser) {
+          await fetchProfile(currentUser.uid);
+        } else {
+          setProfile(null);
+        }
+        setLoading(false);
+      });
+
+      return unsubscribe;
     };
-    checkRedirect();
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        await fetchProfile(currentUser.uid);
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
+    const unsubscribePromise = initAuth();
 
-    return unsubscribe;
+    return () => {
+      isMounted = false;
+      unsubscribePromise.then(unsubscribe => unsubscribe && unsubscribe());
+    };
   }, []);
 
   const refreshProfile = async () => {
