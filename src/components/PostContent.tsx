@@ -23,7 +23,7 @@ export default function PostContent({ content }: PostContentProps) {
   return (
     <div className="space-y-4">
       {textWithoutImages && (
-        <p className="text-slate-300 whitespace-pre-wrap">
+        <p className="text-slate-300 whitespace-pre-wrap break-words">
           {parts.map((part, i) => {
             if (part.match(urlRegex)) {
               return (

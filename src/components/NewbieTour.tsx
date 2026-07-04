@@ -9,7 +9,7 @@ const TOUR_STEPS = [
     title: '面基行动',
     desc: '找搭子、组团去漫展、跑团约饭都在这里！',
     icon: MapPin,
-    mobilePos: { bottom: '100px', left: '10%', transform: 'translateX(-50%)' },
+    mobilePos: { bottom: '100px', left: '16px' },
     desktopPos: { top: '150px', left: '270px' }
   },
   {
@@ -17,7 +17,7 @@ const TOUR_STEPS = [
     title: '摸鱼广场',
     desc: '日常吐个槽，发个二次元段子，扩列吹水~',
     icon: MessageSquare,
-    mobilePos: { bottom: '100px', left: '30%', transform: 'translateX(-50%)' },
+    mobilePos: { bottom: '100px', left: '16px' },
     desktopPos: { top: '210px', left: '270px' }
   },
   {
@@ -33,7 +33,7 @@ const TOUR_STEPS = [
     title: '回血集市',
     desc: '吃土了？二手Cos服、谷子、手办快来回血！',
     icon: ShoppingBag,
-    mobilePos: { bottom: '100px', left: '70%', transform: 'translateX(-50%)' },
+    mobilePos: { bottom: '100px', right: '16px' },
     desktopPos: { top: '330px', left: '270px' }
   },
   {
@@ -41,7 +41,7 @@ const TOUR_STEPS = [
     title: '探索更多',
     desc: '点击右下角的“更多”，可以找到次元羁绊册（同好名册）和再次打开本新手攻略哦！',
     icon: Sparkles,
-    mobilePos: { bottom: '100px', left: '90%', transform: 'translateX(-50%)' },
+    mobilePos: { bottom: '100px', right: '16px' },
     desktopPos: { top: '390px', left: '270px' }
   },
   {

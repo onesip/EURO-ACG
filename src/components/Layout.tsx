@@ -224,7 +224,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <main className="max-w-3xl w-full mx-auto px-4 py-6 pt-[calc(5rem+env(safe-area-inset-top))] pb-[calc(7rem+env(safe-area-inset-bottom))] md:px-8 md:py-8 md:pt-20 md:pb-8">
         <QuotaBanner />
         {/* Responsive Header Banner */}
-        <div className="fixed top-0 inset-x-0 md:left-64 pt-[env(safe-area-inset-top)] h-[calc(3.5rem+env(safe-area-inset-top))] bg-[#141416]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 md:px-8 z-40">
+        <div 
+          style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}
+          className="fixed top-0 inset-x-0 md:left-64 bg-[#141416]/90 backdrop-blur-xl border-b border-white/10 flex items-center justify-between px-4 md:px-8 pb-3 z-40 shadow-sm"
+        >
            <div className="flex items-center gap-2">
              <h1 className="text-lg font-bold tracking-tight text-white md:hidden">EUROACG</h1>
              {user && (
@@ -236,11 +239,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
            </div>
            <div className="flex items-center gap-3">
              {user && <NotificationCenter />}
-             {user && <span className="w-[1px] h-4 bg-white/10" />}
-             <ThemeRow />
-             <span className="w-[1px] h-4 bg-white/10" />
-             <LanguageToggle />
-             <span className="w-[1px] h-4 bg-white/10" />
+             {user && <span className="hidden md:block w-[1px] h-4 bg-white/10" />}
+             <div className="hidden md:flex items-center gap-3">
+               <ThemeRow />
+               <span className="w-[1px] h-4 bg-white/10" />
+               <LanguageToggle />
+               <span className="w-[1px] h-4 bg-white/10" />
+             </div>
              
              {/* Header Avatar Widget */}
              <Link
@@ -476,6 +481,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                       {lang === 'zh' ? '次元电波主题' : 'ACG Theme'}
                     </span>
                     <ThemeRow />
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 text-xs">
+                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                      <Globe className="w-4 h-4 text-slate-400" />
+                      {lang === 'zh' ? '次元语种切换' : 'Language'}
+                    </span>
+                    <LanguageToggle />
                   </div>
 
                   <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 text-xs">
