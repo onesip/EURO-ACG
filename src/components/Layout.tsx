@@ -10,6 +10,7 @@ import { useTheme, ACG_THEMES } from './ThemeProvider';
 import QuotaBanner from './QuotaBanner';
 import NotificationCenter from './NotificationCenter';
 import InAppNoticeOverlay from './InAppNoticeOverlay';
+import { NewbieTour } from './NewbieTour';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, profile, isQuotaExceeded, isLoginModalOpen, setOpenLoginModal: setIsLoginModalOpen } = useAuth();
@@ -120,7 +121,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] text-slate-200 font-sans pb-20 md:pb-0 md:pl-64">
+    <div className="min-h-[100dvh] w-full overflow-x-hidden bg-[#0A0A0B] text-slate-200 font-sans pb-[100px] md:pb-0 md:pl-64">
       <InAppNoticeOverlay />
       {/* Sidebar for Desktop */}
       <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#141416] border-r border-white/5 md:flex flex-col z-50">
@@ -669,6 +670,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       )}
+      <NewbieTour />
     </div>
   );
 }
