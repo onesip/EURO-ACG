@@ -67,7 +67,7 @@ export default function ActivitiesPage() {
     }
   }, [sharedId, activities, lang]);
 
-  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com' || user?.email === 'info@onesip.nl';
+  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
   useEffect(() => {
     setIndexRequired(false);

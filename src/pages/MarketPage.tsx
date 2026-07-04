@@ -31,7 +31,7 @@ export default function MarketPage() {
   const { showProfile } = useUserProfileModal();
   const location = useLocation();
 
-  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com' || user?.email === 'info@onesip.nl';
+  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
   const handleLike = async (postId: string, currentLikes: string[] = []) => {
     if (!user) {
