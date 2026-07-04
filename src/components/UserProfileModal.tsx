@@ -14,6 +14,7 @@ import { cn } from '../lib/utils';
 import { loadFromCache, saveToCache } from '../lib/cache';
 import PostContent from './PostContent';
 import { motion, AnimatePresence } from 'motion/react';
+import { sendNotification } from '../lib/notifications';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', en: 'Netherlands', flag: '🇳🇱' },
@@ -196,19 +197,58 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
       });
       setFriendRequestId(docRef.id);
       setFriendStatus('pending_sent');
+
+      // Dispatch friend request notification
+      const titleZh = "🤝 收到一份死党契约申请！";
+      const titleEn = "🤝 New Friend Request!";
+      const contentZh = `🌟 【${currentUserProfile.displayName || '二次元同好'}】向你递交了一份死党契约，想要与你缔结羁绊哦！快去查看吧！(✿◡◡✿)`;
+      const contentEn = `🌟 【${currentUserProfile.displayName || 'ACG Pal'}】wants to forge a soul contract (friend request) with you! Go accept it! (✿◡◡✿)`;
+      
+      await sendNotification(
+        profileUid,
+        user.uid,
+        currentUserProfile.displayName || 'Moyu Pal',
+        currentUserProfile.photoURL || '',
+        'friend_request',
+        titleZh,
+        contentZh,
+        '/profile'
+      );
     } catch (err) {
       console.error(err);
     }
   };
 
   const handleAcceptFriend = async () => {
-    if (!friendRequestId || !user || !profileUid) return;
+    if (!friendRequestId || !user || !profileUid || !currentUserProfile) return;
     try {
       await updateDoc(doc(db, 'friendRequests', friendRequestId), { status: 'accepted' });
       // Also add to friends subcollection for both
       await setDoc(doc(db, 'users', user.uid, 'friends', profileUid), { uid: profileUid, createdAt: serverTimestamp() });
       await setDoc(doc(db, 'users', profileUid, 'friends', user.uid), { uid: user.uid, createdAt: serverTimestamp() });
+      
+      // Clear friends cache to force instant refresh
+      localStorage.removeItem(`user_friends_list_${user.uid}`);
+      localStorage.removeItem(`user_friends_list_${profileUid}`);
+
       setFriendStatus('friends');
+
+      // Dispatch friend request acceptance notification
+      const titleZh = "💖 羁绊缔结成功！(≧▽≦)/*";
+      const titleEn = "💖 Soul Contract Signed!";
+      const contentZh = `✨ 【${currentUserProfile.displayName || '同好'}】同意了你的死党契约！你们现在是真正的同好伙伴啦，快去私聊互动吧！`;
+      const contentEn = `✨ 【${currentUserProfile.displayName || 'Pal'}】accepted your soul contract! You are now official friends! Go text each other!`;
+      
+      await sendNotification(
+        profileUid,
+        user.uid,
+        currentUserProfile.displayName || 'Moyu Pal',
+        currentUserProfile.photoURL || '',
+        'friend_accept',
+        titleZh,
+        contentZh,
+        '/profile'
+      );
     } catch (err) {
       console.error(err);
     }

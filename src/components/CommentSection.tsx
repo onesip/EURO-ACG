@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, serverTimestamp, getDocs, increment, doc, runTransaction, limit } from 'firebase/firestore';
+import { collection, query, orderBy, serverTimestamp, getDocs, increment, doc, runTransaction, limit, getDoc } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
@@ -8,6 +8,7 @@ import { useUserProfileModal } from './UserProfileModal';
 import { isQuotaExceeded } from '../lib/quota';
 import { COMMENT_PAGE_LIMIT } from '../config/limits';
 import { Send, MessageCircle } from 'lucide-react';
+import { sendNotification } from '../lib/notifications';
 
 export default function CommentSection({ parentCollection, parentId }: { parentCollection: 'activities' | 'posts' | 'services', parentId: string }) {
   const [comments, setComments] = useState<any[]>([]);
@@ -76,6 +77,17 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
       const parentDocRef = doc(db, parentCollection, parentId);
       const newCommentRef = doc(collection(db, parentCollection, parentId, 'comments'));
       
+      let parentAuthorId = '';
+      try {
+        const parentDocSnap = await getDoc(parentDocRef);
+        if (parentDocSnap.exists()) {
+          const pData = parentDocSnap.data();
+          parentAuthorId = pData.authorId || pData.creatorId || '';
+        }
+      } catch (getErr) {
+        console.warn("Failed to fetch parent author details:", getErr);
+      }
+
       await runTransaction(db, async (transaction) => {
         transaction.set(newCommentRef, {
           content: commentText,
@@ -88,6 +100,25 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
           commentCount: increment(1)
         });
       });
+
+      if (parentAuthorId && parentAuthorId !== user.uid) {
+        const titleZh = "💬 吐槽电波！收到同好回复！";
+        const titleEn = "💬 New Retort! Someone replied!";
+        const snippet = commentText.substring(0, 25);
+        const contentZh = `💬 【${profile?.displayName || '神秘萌友'}】在你的帖子下发表了新的吐槽：“${snippet}...” (*≧▽≦) 快去看看吧！`;
+        const contentEn = `💬 【${profile?.displayName || 'ACG Pal'}】commented on your post: "${snippet}..." (*≧▽≦) Go check it out!`;
+        
+        await sendNotification(
+          parentAuthorId,
+          user.uid,
+          profile?.displayName || 'Moyu Pal',
+          profile?.photoURL || '',
+          'comment',
+          lang === 'zh' ? titleZh : titleEn,
+          lang === 'zh' ? contentZh : contentEn,
+          `/community?id=${parentId}`
+        );
+      }
     } catch (error: any) {
       console.error("Firestore comment failed:", error);
       if (error?.code === 'resource-exhausted') {

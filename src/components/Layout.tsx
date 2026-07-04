@@ -8,6 +8,7 @@ import { loginWithGoogle, registerWithEmail, loginWithEmail, logout } from '../l
 import { cn } from '../lib/utils';
 import { useTheme, ACG_THEMES } from './ThemeProvider';
 import QuotaBanner from './QuotaBanner';
+import NotificationCenter from './NotificationCenter';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, profile, isQuotaExceeded, isLoginModalOpen, setOpenLoginModal: setIsLoginModalOpen } = useAuth();
@@ -207,6 +208,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
              )}
            </div>
            <div className="flex items-center gap-3">
+             {user && <NotificationCenter />}
+             {user && <span className="w-[1px] h-4 bg-white/10" />}
              <ThemeRow />
              <span className="w-[1px] h-4 bg-white/10" />
              <LanguageToggle />

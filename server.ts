@@ -5,6 +5,23 @@ import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Helper to fetch with timeout to prevent server thread hangs
+async function fetchWithTimeout(url: string, options: any = {}, timeoutMs = 4000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    return response;
+  } catch (error) {
+    clearTimeout(timer);
+    throw error;
+  }
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -40,14 +57,14 @@ async function startServer() {
         const blob = new Blob([buffer], { type });
         formData.append("file", blob, name);
 
-        const response = await fetch("https://pnglog.com/api/v1/upload", {
+        const response = await fetchWithTimeout("https://pnglog.com/api/v1/upload", {
           method: "POST",
           headers: {
             "Accept": "application/json",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
           body: formData,
-        });
+        }, 4000);
 
         if (response.ok) {
           const data = await response.json();
@@ -61,7 +78,7 @@ async function startServer() {
           console.warn(`[Upload] PngLog non-ok response status: ${response.status}`);
         }
       } catch (e: any) {
-        console.warn("[Upload] PngLog exception:", e.message || e);
+        console.warn("[Upload] PngLog exception/timeout:", e.message || e);
       }
 
       // 2. Try Telegra.ph (Ultra-fast, global, extremely stable)
@@ -71,13 +88,13 @@ async function startServer() {
         const teleBlob = new Blob([buffer], { type });
         teleFormData.append("file", teleBlob, name);
 
-        const teleRes = await fetch("https://telegra.ph/upload", {
+        const teleRes = await fetchWithTimeout("https://telegra.ph/upload", {
           method: "POST",
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
           body: teleFormData,
-        });
+        }, 3500);
 
         if (teleRes.ok) {
           const data = await teleRes.json();
@@ -92,7 +109,7 @@ async function startServer() {
           console.warn(`[Upload] Telegra.ph non-ok response status: ${teleRes.status}`);
         }
       } catch (e: any) {
-        console.warn("[Upload] Telegra.ph exception:", e.message || e);
+        console.warn("[Upload] Telegra.ph exception/timeout:", e.message || e);
       }
 
       // 3. Try Catbox (High reliability fallback)
@@ -103,13 +120,13 @@ async function startServer() {
         const catboxBlob = new Blob([buffer], { type });
         catboxFormData.append("fileToUpload", catboxBlob, name);
 
-        const catboxRes = await fetch("https://catbox.moe/user/api.php", {
+        const catboxRes = await fetchWithTimeout("https://catbox.moe/user/api.php", {
           method: "POST",
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
           body: catboxFormData,
-        });
+        }, 3500);
 
         if (catboxRes.ok) {
           const url = await catboxRes.text();
@@ -123,7 +140,7 @@ async function startServer() {
           console.warn(`[Upload] Catbox non-ok response status: ${catboxRes.status}`);
         }
       } catch (e: any) {
-        console.warn("[Upload] Catbox exception:", e.message || e);
+        console.warn("[Upload] Catbox exception/timeout:", e.message || e);
       }
 
       throw new Error("所有上传服务暂时不可用，请稍后再试 (All upload services failed)");

@@ -17,6 +17,7 @@ import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Gl
 import { cn } from '../lib/utils';
 import { loadFromCache, saveToCache } from '../lib/cache';
 import MoyuChatroom from '../components/MoyuChatroom';
+import { sendNotification } from '../lib/notifications';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰', flag: '🇳🇱', en: 'Netherlands' },
@@ -86,11 +87,17 @@ export default function CommunityPage() {
 
     try {
       const postRef = doc(db, 'posts', postId);
+      let shouldNotify = false;
+      let authorId = '';
+      let postContentSnippet = '';
+      
       await runTransaction(db, async (transaction) => {
         const postDoc = await transaction.get(postRef);
         if (!postDoc.exists()) throw "Post does not exist!";
         
         const postData = postDoc.data();
+        authorId = postData.authorId || '';
+        postContentSnippet = (postData.content || '').substring(0, 20);
         const likes = postData.likes || [];
         const isCurrentlyLikedReal = likes.includes(user.uid);
 
@@ -104,8 +111,27 @@ export default function CommunityPage() {
             likes: arrayUnion(user.uid),
             likeCount: increment(1)
           });
+          shouldNotify = true;
         }
       });
+
+      if (shouldNotify && authorId && authorId !== user.uid) {
+        const titleZh = "💖 贴贴电波！收到同好印记！";
+        const titleEn = "💖 Stamp of Love! Post liked!";
+        const contentZh = `🌟 【${profile?.displayName || '神秘萌友'}】刚对你的帖子（“${postContentSnippet}...”）盖章了一个暖心的贴贴！(〃>▽<〃)/*`;
+        const contentEn = `🌟 【${profile?.displayName || 'ACG Pal'}】just left a lovely stamp of approval on your post: "${postContentSnippet}..."! (〃>▽<〃)/*`;
+        
+        await sendNotification(
+          authorId,
+          user.uid,
+          profile?.displayName || 'Moyu Pal',
+          profile?.photoURL || '',
+          'like',
+          lang === 'zh' ? titleZh : titleEn,
+          lang === 'zh' ? contentZh : contentEn,
+          `/community?id=${postId}`
+        );
+      }
     } catch (err: any) {
       console.error("Failed to like post", err);
       if (err?.code === 'resource-exhausted') {

@@ -10,6 +10,7 @@ import { useLanguage } from '../components/LanguageProvider';
 import { useTheme, ACG_THEMES } from '../components/ThemeProvider';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { sendNotification } from '../lib/notifications';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰 (Netherlands)' },
@@ -132,6 +133,28 @@ export default function ProfilePage() {
       await updateDoc(doc(db, 'friendRequests', reqId), { status: 'accepted' });
       await setDoc(doc(db, 'users', user.uid, 'friends', senderId), { uid: senderId, createdAt: serverTimestamp() });
       await setDoc(doc(db, 'users', senderId, 'friends', user.uid), { uid: user.uid, createdAt: serverTimestamp() });
+      
+      // Clear friends cache to force instant refresh
+      localStorage.removeItem(`user_friends_list_${user.uid}`);
+      localStorage.removeItem(`user_friends_list_${senderId}`);
+      
+      // Dispatch friend request acceptance notification
+      const titleZh = "💖 羁绊缔结成功！(≧▽≦)/*";
+      const titleEn = "💖 Soul Contract Signed!";
+      const contentZh = `✨ 【${profile?.displayName || '同好'}】同意了你的死党契约！你们现在是真正的同好伙伴啦，快去私聊互动吧！`;
+      const contentEn = `✨ 【${profile?.displayName || 'Pal'}】accepted your soul contract! You are now official friends! Go text each other!`;
+      
+      await sendNotification(
+        senderId,
+        user.uid,
+        profile?.displayName || 'Moyu Pal',
+        profile?.photoURL || '',
+        'friend_accept',
+        titleZh,
+        contentZh,
+        '/profile'
+      );
+
       alert(lang === 'zh' ? '🎉 已通过好友请求！你们现在可以开始私聊啦！' : 'Friend request accepted! You can now chat privately!');
       fetchFriendsAndRequests();
     } catch (err) {

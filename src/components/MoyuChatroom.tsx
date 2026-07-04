@@ -9,6 +9,7 @@ import UserAvatar from './UserAvatar';
 import { cn } from '../lib/utils';
 import { UserProfile } from '../types';
 import { useSearchParams } from 'react-router-dom';
+import { sendNotification } from '../lib/notifications';
 
 interface ChatMessage {
   id: string;
@@ -312,6 +313,26 @@ export default function MoyuChatroom() {
         type: isAction ? 'action' : 'text',
         actionType: actType
       });
+
+      // Dispatch real-time notification for private messages
+      if (chatType === 'private' && selectedFriendUid) {
+        const snippet = textToSend.substring(0, 25);
+        const titleZh = "✉️ 收到同好私信电波！";
+        const titleEn = "✉️ New Private Chat Alert!";
+        const contentZh = `💬 【${profile?.displayName || '神秘萌友'}】给你发来了悄悄话：“${snippet}...” (≧▽≦)/ 戳我去回复~`;
+        const contentEn = `💬 【${profile?.displayName || 'ACG Pal'}】sent you a message: "${snippet}..." (≧▽≦)/ Click to chat back!`;
+        
+        await sendNotification(
+          selectedFriendUid,
+          user.uid,
+          profile?.displayName || 'Moyu Pal',
+          profile?.photoURL || '',
+          'message',
+          lang === 'zh' ? titleZh : titleEn,
+          lang === 'zh' ? contentZh : contentEn,
+          `/community?friend=${user.uid}`
+        );
+      }
     } catch (err: any) {
       console.error("Failed to send chat message:", err);
       if (err?.code === 'resource-exhausted') {
