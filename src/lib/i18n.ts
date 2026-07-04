@@ -5,6 +5,7 @@ export const translations: Record<Language, Record<string, string>> = {
     // Nav
     'nav.activities': 'Activities',
     'nav.community': 'Community',
+    'nav.members': 'ACG Members',
     'nav.market': 'Flea Market',
     'nav.profile': 'Profile',
     'nav.services': 'Services',
@@ -120,6 +121,7 @@ export const translations: Record<Language, Record<string, string>> = {
     // Nav
     'nav.activities': '面基行动',
     'nav.community': '摸鱼广场',
+    'nav.members': '同好名册',
     'nav.market': '回血集市',
     'nav.profile': '本命档案',
     'nav.services': '神仙产粮',

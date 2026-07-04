@@ -146,25 +146,40 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
         const reviewsData = snapReviews.docs.map(d => ({ id: d.id, ...d.data() }) as UserReview);
         setReviews(reviewsData);
 
-        // Check Friend Status (getDocs with limit 1 instead of onSnapshot)
+        // Check Friend Status
         if (user && user.uid !== profileUid) {
-          const q1 = query(collection(db, 'friendRequests'), where('fromId', '==', user.uid), where('toId', '==', profileUid), limit(1));
-          const snap1 = await getDocs(q1);
-          if (!snap1.empty) {
-            const req = snap1.docs[0].data() as FriendRequest;
-            setFriendRequestId(snap1.docs[0].id);
-            if (req.status === 'accepted') setFriendStatus('friends');
-            else setFriendStatus('pending_sent');
+          const fSnap = await getDoc(doc(db, 'users', user.uid, 'friends', profileUid));
+          if (fSnap.exists()) {
+            setFriendStatus('friends');
+            setFriendRequestId(null);
             return;
           }
 
-          const q2 = query(collection(db, 'friendRequests'), where('fromId', '==', profileUid), where('toId', '==', user.uid), limit(1));
+          const q1 = query(
+            collection(db, 'friendRequests'),
+            where('fromId', '==', user.uid),
+            where('toId', '==', profileUid),
+            where('status', '==', 'pending'),
+            limit(1)
+          );
+          const snap1 = await getDocs(q1);
+          if (!snap1.empty) {
+            setFriendRequestId(snap1.docs[0].id);
+            setFriendStatus('pending_sent');
+            return;
+          }
+
+          const q2 = query(
+            collection(db, 'friendRequests'),
+            where('fromId', '==', profileUid),
+            where('toId', '==', user.uid),
+            where('status', '==', 'pending'),
+            limit(1)
+          );
           const snap2 = await getDocs(q2);
           if (!snap2.empty) {
-            const req = snap2.docs[0].data() as FriendRequest;
             setFriendRequestId(snap2.docs[0].id);
-            if (req.status === 'accepted') setFriendStatus('friends');
-            else setFriendStatus('pending_received');
+            setFriendStatus('pending_received');
             return;
           }
 

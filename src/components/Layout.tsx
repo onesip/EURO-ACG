@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette, Mail, Lock, User, RefreshCw } from 'lucide-react';
+import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette, Mail, Lock, User, RefreshCw, Users } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
@@ -9,6 +9,7 @@ import { cn } from '../lib/utils';
 import { useTheme, ACG_THEMES } from './ThemeProvider';
 import QuotaBanner from './QuotaBanner';
 import NotificationCenter from './NotificationCenter';
+import InAppNoticeOverlay from './InAppNoticeOverlay';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, profile, isQuotaExceeded, isLoginModalOpen, setOpenLoginModal: setIsLoginModalOpen } = useAuth();
@@ -71,6 +72,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navItems = [
     { name: t('nav.activities'), path: '/', icon: Calendar },
     { name: t('nav.community'), path: '/community', icon: MessageSquare },
+    { name: t('nav.members'), path: '/members', icon: Users },
     { name: t('nav.market'), path: '/market', icon: ShoppingBag },
     { name: t('nav.services'), path: '/services', icon: Camera },
     { name: t('nav.guide'), path: '/guide', icon: BookOpen },
@@ -110,6 +112,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] text-slate-200 font-sans pb-20 md:pb-0 md:pl-64">
+      <InAppNoticeOverlay />
       {/* Sidebar for Desktop */}
       <aside className="fixed inset-y-0 left-0 hidden w-64 bg-[#141416] border-r border-white/5 md:flex flex-col z-50">
         <div className="p-6">

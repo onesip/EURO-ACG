@@ -15,6 +15,7 @@ import MarketPage from './pages/MarketPage';
 import ProfilePage from './pages/ProfilePage';
 import ServicesPage from './pages/ServicesPage';
 import GuidePage from './pages/GuidePage';
+import MembersPage from './pages/MembersPage';
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/services" element={<ServicesPage />} />
                   <Route path="/guide" element={<GuidePage />} />
+                  <Route path="/members" element={<MembersPage />} />
                 </Routes>
               </Layout>
             </Router>
