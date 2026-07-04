@@ -255,7 +255,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
              </Link>
            </div>
         </div>
-        {children}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 10, filter: 'blur(3px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -10, filter: 'blur(3px)' }}
+            transition={{ duration: 0.24, ease: [0.215, 0.61, 0.355, 1] }}
+            className="w-full"
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Bottom Nav for Mobile */}
