@@ -403,8 +403,8 @@ export default function ActivitiesPage() {
                   <span className="text-[10px] font-bold pr-1">{lang === 'zh' ? '置顶' : 'Pinned'}</span>
                 </div>
               )}
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-wrap justify-between items-start mb-3 gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full text-xs font-semibold uppercase tracking-wider">
                     {t(`act.modal.type.${activity.type}`) || activity.type}
                   </div>
@@ -530,8 +530,8 @@ export default function ActivitiesPage() {
                 </div>
               )}
 
-              <div className="flex items-center justify-between pt-4 border-t border-white/5 mt-4">
-                <div className="flex -space-x-2 overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-white/5 mt-4">
+                <div className="flex -space-x-2 overflow-hidden shrink-0">
                   {activity.participants?.slice(0, 5).map((p, i) => (
                     <UserAvatar 
                       key={i} 
@@ -550,7 +550,7 @@ export default function ActivitiesPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {(user && activity.creatorId === user.uid || isAdmin) && (
                       <div className="flex items-center gap-1.5">
                         {confirmDeleteId === activity.id ? (

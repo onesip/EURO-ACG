@@ -443,8 +443,8 @@ export default function CommunityPage() {
                   <span className="text-[10px] font-bold pr-1">{lang === 'zh' ? '置顶' : 'Pinned'}</span>
                 </div>
               )}
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-start gap-3">
+              <div className="flex justify-between items-start mb-3 gap-3">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
                   <UserAvatar 
                     uid={post.authorId} 
                     photoURL={post.authorPhoto} 
@@ -479,8 +479,8 @@ export default function CommunityPage() {
               <div className="mb-4">
                 <PostContent content={post.content} />
               </div>
-              <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
-                <div className="flex items-center gap-6">
+              <div className="flex flex-wrap justify-between items-center gap-4 mt-4 pt-4 border-t border-white/5">
+                <div className="flex flex-wrap items-center gap-4">
                   <button 
                     onClick={() => handleLike(post.id, post.likes)}
                     className={cn(
@@ -500,7 +500,7 @@ export default function CommunityPage() {
                 </div>
 
                 {user && post.authorId === user.uid && (
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3">
                     {confirmDeleteId === post.id ? (
                       <div className="flex items-center gap-2 animate-fadeIn bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-xl">
                         <span className="text-[11px] text-rose-400 font-bold">{lang === 'zh' ? '确定删除该帖子吗？' : 'Delete this post?'}</span>

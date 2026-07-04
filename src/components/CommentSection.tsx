@@ -191,15 +191,15 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
                   >
                       {comment.authorPhoto ? <img src={comment.authorPhoto} className="w-full h-full object-cover" /> : comment.authorName?.charAt(0) || 'U'}
                   </div>
-                  <div>
-                    <div className="bg-white/5 rounded-2xl rounded-tl-none px-4 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="bg-white/5 rounded-2xl rounded-tl-none px-4 py-2 inline-block max-w-full">
                       <p 
                         onClick={() => showProfile(comment.authorId, { displayName: comment.authorName, photoURL: comment.authorPhoto })}
-                        className="text-xs font-medium text-slate-300 hover:text-indigo-400 cursor-pointer transition-colors mb-0.5"
+                        className="text-xs font-medium text-slate-300 hover:text-indigo-400 cursor-pointer transition-colors mb-0.5 truncate"
                       >
                         {comment.authorName}
                       </p>
-                      <p className="text-sm text-slate-200">{comment.content}</p>
+                      <p className="text-sm text-slate-200 break-words whitespace-pre-wrap">{comment.content}</p>
                     </div>
                     <p className="text-[10px] text-slate-500 mt-1 ml-2">
                       {comment.createdAt ? new Date(comment.createdAt.toMillis()).toLocaleString() : 'Just now'}
