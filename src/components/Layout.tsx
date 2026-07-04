@@ -83,7 +83,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const mobileNavItems = [
     { name: t('nav.activities'), path: '/', icon: Calendar },
     { name: t('nav.community'), path: '/community', icon: MessageSquare },
-    { name: t('nav.members'), path: '/members', icon: Users },
+    { name: t('nav.services'), path: '/services', icon: Camera },
     { name: t('nav.market'), path: '/market', icon: ShoppingBag },
   ];
 
@@ -415,17 +415,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 {/* Sub-Tabs Grid */}
                 <div className="grid grid-cols-2 gap-3">
                   <Link
-                    to="/services"
+                    to="/members"
                     onClick={() => setIsMoreOpen(false)}
                     className="p-4 bg-[#141416] border border-white/5 rounded-2xl flex flex-col gap-2 hover:border-indigo-500/30 transition-colors shadow-lg active:scale-95 duration-200"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
-                      <Camera className="w-5 h-5" />
+                    <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                      <Users className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-white text-xs">{t('nav.services')}</h4>
+                      <h4 className="font-bold text-white text-xs">{t('nav.members')}</h4>
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        {lang === 'zh' ? '摄影・妆造・后期' : 'Photo & Makeup'}
+                        {lang === 'zh' ? '面基同好/扩列星图' : 'Connect with Fans'}
                       </p>
                     </div>
                   </Link>
