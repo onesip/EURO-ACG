@@ -8,6 +8,7 @@ import { MessageSquare, Send, Sparkles, Users, Coffee, RefreshCw, Heart, Lock, G
 import UserAvatar from './UserAvatar';
 import { cn } from '../lib/utils';
 import { UserProfile } from '../types';
+import { useSearchParams } from 'react-router-dom';
 
 interface ChatMessage {
   id: string;
@@ -71,6 +72,20 @@ export default function MoyuChatroom() {
   const [friendsList, setFriendsList] = useState<{ uid: string; displayName: string; photoURL: string; role: string }[]>([]);
   const [selectedFriendUid, setSelectedFriendUid] = useState<string | null>(null);
   const [quoteIndex, setQuoteIndex] = useState(0);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const friendUid = searchParams.get('friend');
+    if (friendUid) {
+      setChatType('private');
+      setSelectedFriendUid(friendUid);
+      // Clean up search param from the URL
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete('friend');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isChinese = lang === 'zh';

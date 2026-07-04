@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { db } from '../lib/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs, getDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { UserRole, Gender } from '../types';
-import { Save, LogIn, Sparkles, MapPin, Palette, RefreshCw } from 'lucide-react';
+import { Save, LogIn, Sparkles, MapPin, Palette, RefreshCw, Users, UserCheck, Check, X, MessageSquare, Trash2 } from 'lucide-react';
 import { loginWithGoogle } from '../lib/firebase';
 import ImageUpload from '../components/ImageUpload';
 import { useLanguage } from '../components/LanguageProvider';
 import { useTheme, ACG_THEMES } from '../components/ThemeProvider';
 import { cn } from '../lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰 (Netherlands)' },
@@ -29,7 +30,110 @@ export default function ProfilePage() {
   const { user, profile, refreshProfile, updateProfileOptimistically, setQuotaExceeded } = useAuth();
   const { t, lang } = useLanguage();
   const { activeTheme, setThemeById } = useTheme();
+  const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
+
+  // Friends & Requests State
+  const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [friendsList, setFriendsList] = useState<any[]>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+
+  const fetchFriendsAndRequests = async () => {
+    if (!user) return;
+    setLoadingFriends(true);
+    try {
+      // 1. Fetch pending incoming requests
+      const qRequests = query(
+        collection(db, 'friendRequests'),
+        where('toId', '==', user.uid),
+        where('status', '==', 'pending')
+      );
+      const snapRequests = await getDocs(qRequests);
+      const reqs = snapRequests.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      setIncomingRequests(reqs);
+
+      // 2. Fetch friends list from subcollection
+      const friendsRef = collection(db, 'users', user.uid, 'friends');
+      const snapFriends = await getDocs(friendsRef);
+      const friendIds = snapFriends.docs.map(d => d.id);
+
+      if (friendIds.length === 0) {
+        setFriendsList([]);
+        setLoadingFriends(false);
+        return;
+      }
+
+      // Fetch user profiles for friends
+      const list = [];
+      for (const fid of friendIds) {
+        try {
+          const uSnap = await getDoc(doc(db, 'users', fid));
+          if (uSnap.exists()) {
+            const uData = uSnap.data();
+            list.push({
+              uid: fid,
+              displayName: uData.displayName || (lang === 'zh' ? '二次元萌友' : 'Moyu Friend'),
+              photoURL: uData.photoURL || '',
+              role: uData.role || 'other'
+            });
+          }
+        } catch (e) {
+          console.error("Error fetching friend profile:", e);
+        }
+      }
+      setFriendsList(list);
+    } catch (err) {
+      console.error("Error fetching friends/requests:", err);
+    } finally {
+      setLoadingFriends(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchFriendsAndRequests();
+    }
+  }, [user]);
+
+  const handleAcceptRequest = async (reqId: string, senderId: string) => {
+    try {
+      await updateDoc(doc(db, 'friendRequests', reqId), { status: 'accepted' });
+      await setDoc(doc(db, 'users', user.uid, 'friends', senderId), { uid: senderId, createdAt: serverTimestamp() });
+      await setDoc(doc(db, 'users', senderId, 'friends', user.uid), { uid: user.uid, createdAt: serverTimestamp() });
+      alert(lang === 'zh' ? '🎉 已通过好友请求！你们现在可以开始私聊啦！' : 'Friend request accepted! You can now chat privately!');
+      fetchFriendsAndRequests();
+    } catch (err) {
+      console.error(err);
+      alert(lang === 'zh' ? '处理请求失败，请稍后重试' : 'Failed to accept request');
+    }
+  };
+
+  const handleDeclineRequest = async (reqId: string) => {
+    try {
+      await updateDoc(doc(db, 'friendRequests', reqId), { status: 'rejected' });
+      alert(lang === 'zh' ? '已拒绝好友请求' : 'Friend request declined');
+      fetchFriendsAndRequests();
+    } catch (err) {
+      console.error(err);
+      alert(lang === 'zh' ? '操作失败，请稍后重试' : 'Action failed');
+    }
+  };
+
+  const handleRemoveFriend = async (friendId: string) => {
+    if (!window.confirm(lang === 'zh' ? '⚠️ 确定要删除该死党好友吗？' : 'Are you sure you want to remove this friend?')) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'friends', friendId));
+      await deleteDoc(doc(db, 'users', friendId, 'friends', user.uid));
+      alert(lang === 'zh' ? '已解除好友关系' : 'Friend removed');
+      fetchFriendsAndRequests();
+    } catch (err) {
+      console.error(err);
+      alert(lang === 'zh' ? '删除失败，请稍后重试' : 'Failed to remove friend');
+    }
+  };
   const [formData, setFormData] = useState({
     displayName: '',
     photoURL: '',
@@ -177,6 +281,136 @@ export default function ProfilePage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">{t('prof.title')}</h1>
         <p className="text-slate-400 mt-1">{t('prof.subtitle')}</p>
+      </div>
+
+      {/* 二次元死党与请求 (Friends & Requests) */}
+      <div className="bg-[#141416] p-6 rounded-3xl border border-white/5 space-y-6">
+        <div className="flex items-center justify-between border-b border-white/5 pb-3">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-lg font-semibold text-white">
+              {lang === 'zh' ? '🤝 我的二次元死党与请求' : '🤝 My Friends & Requests'}
+            </h2>
+          </div>
+          <button
+            onClick={fetchFriendsAndRequests}
+            disabled={loadingFriends}
+            className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-white/5 rounded-lg transition-colors flex items-center gap-1 text-xs"
+            title={lang === 'zh' ? '刷新好友列表' : 'Refresh list'}
+          >
+            <RefreshCw className={cn("w-3.5 h-3.5", loadingFriends && "animate-spin")} />
+            <span>{lang === 'zh' ? '同步好友' : 'Sync'}</span>
+          </button>
+        </div>
+
+        {/* 1. Pending Incoming Requests */}
+        {incomingRequests.length > 0 && (
+          <div className="space-y-3 bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/20">
+            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+              <UserCheck className="w-4 h-4" />
+              {lang === 'zh' ? `收到新死党请求 (${incomingRequests.length})` : `New Friend Requests (${incomingRequests.length})`}
+            </h3>
+            <div className="grid gap-3">
+              {incomingRequests.map((req) => (
+                <div key={req.id} className="flex items-center justify-between bg-[#1b1c23] p-3 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={req.fromPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.fromId}`}
+                      alt="Avatar"
+                      className="w-9 h-9 rounded-full object-cover border border-white/10"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-white">{req.fromName || (lang === 'zh' ? '神秘萌友' : 'Moyu Fan')}</p>
+                      <p className="text-[10px] text-slate-500">
+                        {lang === 'zh' ? '请求与你结为死党' : 'Wants to add you as a friend'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleAcceptRequest(req.id, req.fromId)}
+                      className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-xs px-2.5"
+                      title={lang === 'zh' ? '同意' : 'Accept'}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{lang === 'zh' ? '同意' : 'Accept'}</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeclineRequest(req.id)}
+                      className="p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-xs px-2.5"
+                      title={lang === 'zh' ? '拒绝' : 'Decline'}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>{lang === 'zh' ? '拒绝' : 'Decline'}</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 2. My Friends List */}
+        <div>
+          <h3 className="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-1.5">
+            <span>👥</span>
+            {lang === 'zh' ? '我的死党列表' : 'My Friends'}
+            <span className="text-xs text-slate-500 font-normal">({friendsList.length})</span>
+          </h3>
+
+          {loadingFriends ? (
+            <div className="flex items-center justify-center py-6">
+              <RefreshCw className="w-5 h-5 text-indigo-500 animate-spin" />
+            </div>
+          ) : friendsList.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {friendsList.map((friend) => (
+                <div key={friend.uid} className="flex items-center justify-between p-3 bg-white/[0.02] hover:bg-white/[0.04] rounded-2xl border border-white/5 transition-all">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={friend.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.uid}`}
+                      alt="Avatar"
+                      className="w-10 h-10 rounded-full object-cover border border-white/10"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-white">{friend.displayName}</p>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 capitalize">
+                        {friend.role === 'coser' ? (lang === 'zh' ? 'Coser' : 'Coser') :
+                         friend.role === 'photographer' ? (lang === 'zh' ? '摄影' : 'Photographer') :
+                         friend.role === 'makeup' ? (lang === 'zh' ? '妆造' : 'Makeup Artist') :
+                         friend.role === 'fan' ? (lang === 'zh' ? '同好' : 'ACG Fan') : (lang === 'zh' ? '次元行者' : 'Adventurer')}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => navigate(`/community?friend=${friend.uid}`)}
+                      className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors flex items-center justify-center gap-1 text-xs font-medium px-3"
+                      title={lang === 'zh' ? '去聊天' : 'Chat'}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>{lang === 'zh' ? '私聊' : 'Chat'}</span>
+                    </button>
+                    <button
+                      onClick={() => handleRemoveFriend(friend.uid)}
+                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-white/5 rounded-xl transition-colors"
+                      title={lang === 'zh' ? '删除好友' : 'Remove friend'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-slate-500 text-xs bg-white/[0.01] rounded-2xl border border-dashed border-white/5 px-4">
+              <p className="mb-2">👻 {lang === 'zh' ? '你还没有添加任何二次元死党哦' : 'No friends added yet'}</p>
+              <p className="text-slate-600 max-w-md mx-auto leading-relaxed">
+                {lang === 'zh' ? '可以前往「社区交流」或活动、同城集市中，点击其他同好的头像，在个人卡片中加他们为好友！' : 'Go to Community or Marketplace, click on avatars and send friend requests!'}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-[#141416] p-6 rounded-3xl border border-white/5 space-y-6">
