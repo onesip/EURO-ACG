@@ -67,7 +67,7 @@ export default function ActivitiesPage() {
     }
   }, [sharedId, activities, lang]);
 
-  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
+  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com' || user?.email === 'info@onesip.nl';
 
   useEffect(() => {
     setIndexRequired(false);
@@ -106,16 +106,32 @@ export default function ActivitiesPage() {
           if (selectedCountry !== 'ALL') {
             constraints.push(where('country', '==', selectedCountry));
           }
-          constraints.push(orderBy('createdAt', 'desc'));
-          constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+          // We sort in memory to avoid requiring complex composite indexes
+          // constraints.push(orderBy('createdAt', 'desc'));
+          constraints.push(limit(150));
 
           const q = query(collection(db, 'activities'), ...constraints);
           const snapshot = await getDocs(q);
           
+          const queriedActivities: Activity[] = [];
           snapshot.docs.forEach(doc => {
             const data = { id: doc.id, ...doc.data() } as Activity;
-            if (!activitiesData.find(a => a.id === data.id)) {
-              activitiesData.push(data);
+            queriedActivities.push(data);
+          });
+
+          // Sort by createdAt desc in memory
+          queriedActivities.sort((a, b) => {
+            const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+            const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+            return timeB - timeA;
+          });
+
+          // Limit and add to activitiesData
+          const displayLimit = user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT;
+          const sliced = queriedActivities.slice(0, displayLimit);
+          sliced.forEach(item => {
+            if (!activitiesData.find(a => a.id === item.id)) {
+              activitiesData.push(item);
             }
           });
         }

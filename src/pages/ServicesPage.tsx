@@ -53,7 +53,7 @@ export default function ServicesPage() {
   const { showProfile } = useUserProfileModal();
   const location = useLocation();
 
-  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
+  const isAdmin = user?.email === 'zhengjiaru2018@gmail.com' || user?.email === 'info@onesip.nl';
 
   const handleSupport = async (adId: string, currentSupports: string[] = []) => {
     if (!user) {
@@ -138,8 +138,10 @@ export default function ServicesPage() {
           constraints.push(where('country', '==', selectedCountry));
         }
 
-        constraints.push(orderBy('createdAt', 'desc'));
-        constraints.push(limit(user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT));
+        // We sort in memory to avoid requiring complex composite indexes
+        // constraints.push(orderBy('createdAt', 'desc'));
+        // Use a reasonable limit to fetch the most recent entries, then we sort and slice
+        constraints.push(limit(150));
 
         const q = query(
           collection(db, 'services'),
@@ -149,10 +151,21 @@ export default function ServicesPage() {
         const snapshot = await getDocs(q);
         setQuotaExceeded(false); // Success! Clear quota if it was set
         
-        const adsData = snapshot.docs.map(doc => ({
+        let adsData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         })) as ServiceAd[];
+
+        // Sort by createdAt desc in memory
+        adsData.sort((a, b) => {
+          const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0);
+          const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0);
+          return timeB - timeA;
+        });
+
+        // Limit the ads to the required list limit
+        const displayLimit = user ? USER_LIST_LIMIT : GUEST_LIST_LIMIT;
+        adsData = adsData.slice(0, displayLimit);
 
         if (sharedId) {
           const exists = adsData.find(a => a.id === sharedId);

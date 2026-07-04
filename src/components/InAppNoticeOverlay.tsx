@@ -101,20 +101,20 @@ export default function InAppNoticeOverlay() {
       try {
         const q = query(
           collection(db, 'announcements'),
-          where('active', '==', true),
           orderBy('createdAt', 'desc'),
-          limit(1)
+          limit(5)
         );
         const snap = await getDocs(q);
-        if (!snap.empty) {
-          const docSnap = snap.docs[0];
-          const data = docSnap.data();
-          const seenKey = `seen_announcement_${docSnap.id}`;
+        const activeDoc = snap.docs.find(doc => doc.data().active === true);
+
+        if (activeDoc) {
+          const data = activeDoc.data();
+          const seenKey = `seen_announcement_${activeDoc.id}`;
           const isSeen = localStorage.getItem(seenKey);
 
           if (!isSeen) {
             setActiveAnnouncement({
-              id: docSnap.id,
+              id: activeDoc.id,
               title: data.title || '',
               content: data.content || ''
             });

@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setQuotaExceededState(val);
   };
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = async (uid: string, currentUser?: User | null) => {
     try {
       const docRef = doc(db, 'users', uid);
       const docSnap = await getDoc(docRef);
@@ -55,10 +55,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         localStorage.setItem(`profile_${uid}`, JSON.stringify(profileData));
       } else {
         // Create empty profile
+        const finalUser = currentUser || auth.currentUser;
         const newProfile: UserProfile = {
           uid,
-          displayName: user?.displayName || auth.currentUser?.displayName || '',
-          photoURL: user?.photoURL || auth.currentUser?.photoURL || '',
+          displayName: finalUser?.displayName || '二次元同好',
+          photoURL: finalUser?.photoURL || '',
           bio: '',
           role: 'other',
           favorites: { anime: '', characters: '', cp: '' },
@@ -142,7 +143,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log("Auth State Changed:", currentUser?.email || "Guest");
       setUser(currentUser);
       if (currentUser) {
-        await fetchProfile(currentUser.uid);
+        await fetchProfile(currentUser.uid, currentUser);
       } else {
         setProfile(null);
       }

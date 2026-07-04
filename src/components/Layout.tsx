@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette, Mail, Lock, User, RefreshCw, Users } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette, Mail, Lock, User, RefreshCw, Users, Menu as MenuIcon } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { loginWithGoogle, registerWithEmail, loginWithEmail, logout } from '../lib/firebase';
@@ -16,6 +16,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { t, lang, setLang } = useLanguage();
   const { activeTheme, setThemeById } = useTheme();
+
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
 
   // Email login/register states
   const [emailMode, setEmailMode] = useState<'login' | 'register'>('login');
@@ -76,6 +78,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: t('nav.market'), path: '/market', icon: ShoppingBag },
     { name: t('nav.services'), path: '/services', icon: Camera },
     { name: t('nav.guide'), path: '/guide', icon: BookOpen },
+  ];
+
+  const mobileNavItems = [
+    { name: t('nav.activities'), path: '/', icon: Calendar },
+    { name: t('nav.community'), path: '/community', icon: MessageSquare },
+    { name: t('nav.members'), path: '/members', icon: Users },
+    { name: t('nav.market'), path: '/market', icon: ShoppingBag },
   ];
 
   const LanguageToggle = () => (
@@ -250,65 +259,210 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Bottom Nav for Mobile */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 bg-[#141416]/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-around px-2 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3 z-50 shadow-[0_-8px_30px_rgba(0,0,0,0.8)] rounded-t-[1.5rem]">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
+      <nav className="md:hidden fixed bottom-5 inset-x-4 h-16 bg-[#141416]/90 backdrop-blur-xl border border-white/10 flex items-center justify-around px-2 py-1.5 z-50 shadow-[0_12px_40px_rgba(0,0,0,0.8)] rounded-full">
+        {mobileNavItems.map((item) => {
+          const isActive = location.pathname === item.path && !isMoreOpen;
           return (
             <Link
               key={item.path}
               to={item.path}
+              onClick={() => setIsMoreOpen(false)}
               className={cn(
-                "flex flex-col items-center gap-1.5 px-3 py-1 rounded-2xl transition-all duration-300 transform active:scale-90 relative",
-                isActive 
-                  ? "text-indigo-400 font-bold" 
-                  : "text-slate-500 hover:text-slate-200"
+                "flex flex-col items-center justify-center gap-0.5 rounded-full transition-all duration-300 transform active:scale-95 relative flex-1 h-full",
+                isActive ? "text-indigo-400" : "text-slate-400"
               )}
             >
               {isActive && (
                 <motion.div 
-                  layoutId="bottomNavTab"
-                  className="absolute -top-3 w-10 h-1 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,1)]" 
+                  layoutId="bottomNavBackground"
+                  className="absolute inset-0 bg-indigo-500/10 rounded-full border border-indigo-500/20"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
-              <item.icon className={cn("w-6 h-6 transition-all", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.6)]" : "opacity-70")} />
-              <span className="text-[10px] font-bold tracking-tight mt-0.5">{item.name}</span>
+              <item.icon className={cn("w-5.5 h-5.5 transition-all relative z-10", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "opacity-80")} />
+              <span className="text-[9px] font-bold tracking-tight mt-0.5 relative z-10 truncate max-w-[55px]">{item.name}</span>
             </Link>
           );
         })}
-        {user ? (
-          (() => {
-            const isActive = location.pathname === '/profile';
-            return (
-              <Link
-                to="/profile"
-                className={cn(
-                  "flex flex-col items-center gap-1.5 px-3 py-1 rounded-2xl transition-all duration-300 transform active:scale-90 relative",
-                  isActive 
-                    ? "text-indigo-400 font-bold" 
-                    : "text-slate-500 hover:text-slate-200"
-                )}
-              >
-                {isActive && (
-                  <motion.div 
-                    layoutId="bottomNavTab"
-                    className="absolute -top-3 w-10 h-1 rounded-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,1)]" 
-                  />
-                )}
-                <UserIcon className={cn("w-6 h-6 transition-all", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.6)]" : "opacity-70")} />
-                <span className="text-[10px] font-bold tracking-tight mt-0.5">{t('nav.profile')}</span>
-              </Link>
-            );
-          })()
-        ) : (
-          <button
-            onClick={() => setIsLoginModalOpen(true)}
-            className="flex flex-col items-center gap-1.5 px-3 py-1 rounded-2xl text-slate-500 hover:text-slate-200 active:scale-90 transition-all"
-          >
-            <LogIn className="w-6 h-6 opacity-70" />
-            <span className="text-[10px] font-bold tracking-tight mt-0.5">{t('nav.login')}</span>
-          </button>
-        )}
+        
+        {/* Portal Button */}
+        <button
+          onClick={() => setIsMoreOpen(!isMoreOpen)}
+          className={cn(
+            "flex flex-col items-center justify-center gap-0.5 rounded-full transition-all duration-300 transform active:scale-95 relative flex-1 h-full",
+            isMoreOpen ? "text-indigo-400" : "text-slate-400"
+          )}
+        >
+          {isMoreOpen && (
+            <motion.div 
+              layoutId="bottomNavBackground"
+              className="absolute inset-0 bg-indigo-500/10 rounded-full border border-indigo-500/20"
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+          <MenuIcon className={cn("w-5.5 h-5.5 transition-all relative z-10", isMoreOpen ? "scale-110 rotate-90" : "")} />
+          <span className="text-[9px] font-bold tracking-tight mt-0.5 relative z-10">{lang === 'zh' ? '更多' : 'More'}</span>
+        </button>
       </nav>
+
+      {/* Sliding Portal Drawer for Mobile */}
+      <AnimatePresence>
+        {isMoreOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMoreOpen(false)}
+              className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 md:hidden"
+            />
+
+            {/* Bottom Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="fixed bottom-0 inset-x-0 bg-[#141416] border-t border-white/10 rounded-t-[2rem] z-45 pb-[calc(80px+env(safe-area-inset-bottom))] pt-5 px-6 md:hidden shadow-[0_-20px_50px_rgba(0,0,0,0.9)] max-h-[85vh] overflow-y-auto"
+            >
+              {/* Drag Indicator */}
+              <div className="w-12 h-1.5 bg-white/15 rounded-full mx-auto mb-5" />
+
+              <div className="space-y-6">
+                {/* Title */}
+                <div className="flex items-center justify-between border-b border-white/5 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-indigo-400 animate-pulse" />
+                    <h3 className="font-bold text-white text-base">
+                      {lang === 'zh' ? '次元传送门' : 'ACG Portal'}
+                    </h3>
+                  </div>
+                  <button 
+                    onClick={() => setIsMoreOpen(false)}
+                    className="p-1 rounded-full bg-white/5 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* User Profile Summary / Login Trigger */}
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                  {user ? (
+                    <div className="flex items-center justify-between">
+                      <Link 
+                        to="/profile" 
+                        onClick={() => setIsMoreOpen(false)}
+                        className="flex items-center gap-3"
+                      >
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-pink-500 to-indigo-500 p-0.5 overflow-hidden shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                          <div className="w-full h-full rounded-full bg-[#141416] flex items-center justify-center font-bold text-white text-xs overflow-hidden">
+                            {profile?.photoURL ? (
+                              <img src={profile.photoURL} alt="Avatar" className="w-full h-full object-cover rounded-full" />
+                            ) : (
+                              (profile?.displayName || 'A').charAt(0).toUpperCase()
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-white text-sm">{profile?.displayName || '二次元同好'}</h4>
+                          <p className="text-xs text-indigo-400 font-medium">
+                            {lang === 'zh' ? '查看及管理本命档案 ' : 'View My Profile '} &rarr;
+                          </p>
+                        </div>
+                      </Link>
+                      <button 
+                        onClick={() => {
+                          setIsMoreOpen(false);
+                          logout();
+                        }}
+                        className="flex items-center gap-1.5 text-xs text-rose-400 hover:text-rose-300 font-bold bg-rose-500/10 px-3 py-1.5 rounded-xl border border-rose-500/10 active:scale-95 transition-transform"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>{lang === 'zh' ? '润了' : 'Exit'}</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-center py-2">
+                      <p className="text-xs text-slate-400 mb-3">
+                        {lang === 'zh' ? '开启全欧洲二次元面基/求回血大门喵~' : 'Unlock full European ACG features!'}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setIsMoreOpen(false);
+                          setIsLoginModalOpen(true);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-indigo-500/20 active:scale-95 transition-transform"
+                      >
+                        <LogIn className="w-4 h-4" />
+                        <span>{t('nav.login')}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Sub-Tabs Grid */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Link
+                    to="/services"
+                    onClick={() => setIsMoreOpen(false)}
+                    className="p-4 bg-[#141416] border border-white/5 rounded-2xl flex flex-col gap-2 hover:border-indigo-500/30 transition-colors shadow-lg active:scale-95 duration-200"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white text-xs">{t('nav.services')}</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {lang === 'zh' ? '摄影・妆造・后期' : 'Photo & Makeup'}
+                      </p>
+                    </div>
+                  </Link>
+
+                  <Link
+                    to="/guide"
+                    onClick={() => setIsMoreOpen(false)}
+                    className="p-4 bg-[#141416] border border-white/5 rounded-2xl flex flex-col gap-2 hover:border-indigo-500/30 transition-colors shadow-lg active:scale-95 duration-200"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                      <BookOpen className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white text-xs">{t('nav.guide')}</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {lang === 'zh' ? '抱团面基求生攻略' : 'ACG Survival Guide'}
+                      </p>
+                    </div>
+                  </Link>
+                </div>
+
+                {/* App Settings */}
+                <div className="space-y-3 pt-2">
+                  <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">
+                    {lang === 'zh' ? '个性化设置 / Customization' : 'Preferences'}
+                  </h4>
+
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 text-xs">
+                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                      <Palette className="w-4 h-4 text-slate-400" />
+                      {lang === 'zh' ? '次元电波主题' : 'ACG Theme'}
+                    </span>
+                    <ThemeRow />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 text-xs">
+                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                      <Globe className="w-4 h-4 text-slate-400" />
+                      {lang === 'zh' ? '切换当前语言' : 'Language'}
+                    </span>
+                    <LanguageToggle />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Auth Choice Modal */}
       {isLoginModalOpen && (

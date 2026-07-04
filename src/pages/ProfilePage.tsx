@@ -250,7 +250,7 @@ export default function ProfilePage() {
   const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
 
   const fetchAnnouncements = async () => {
-    if (!user || user.email !== 'zhengjiaru2018@gmail.com') return;
+    if (!user || (user.email !== 'zhengjiaru2018@gmail.com' && user.email !== 'info@onesip.nl')) return;
     setLoadingAnnouncements(true);
     try {
       const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'));
@@ -329,7 +329,7 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
-    if (user && user.email === 'zhengjiaru2018@gmail.com') {
+    if (user && (user.email === 'zhengjiaru2018@gmail.com' || user.email === 'info@onesip.nl')) {
       fetchAnnouncements();
     }
   }, [user]);
@@ -905,7 +905,7 @@ export default function ProfilePage() {
       </div>
 
       {/* 管理员专区 / Admin Announcement Control Panel */}
-      {user?.email === 'zhengjiaru2018@gmail.com' && (
+      {(user?.email === 'zhengjiaru2018@gmail.com' || user?.email === 'info@onesip.nl') && (
         <div className="bg-[#141416] p-6 rounded-3xl border border-indigo-500/30 space-y-6 shadow-2xl relative overflow-hidden">
           {/* Neon side indicator */}
           <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-indigo-500 to-pink-500" />
