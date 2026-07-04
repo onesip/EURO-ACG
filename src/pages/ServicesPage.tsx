@@ -14,7 +14,7 @@ import ShareButton from '../components/ShareButton';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
 import { ServiceAd, ServiceType } from '../types';
-import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin, AlertCircle } from 'lucide-react';
+import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin, AlertCircle, Palette, Music, Hammer, LayoutGrid } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { loadFromCache, saveToCache } from '../lib/cache';
 const EUROPEAN_COUNTRIES = [
@@ -33,16 +33,20 @@ const EUROPEAN_COUNTRIES = [
 ];
 
 const SERVICE_TABS: { id: ServiceType; icon: any }[] = [
+  { id: 'all', icon: LayoutGrid },
   { id: 'photography', icon: Camera },
   { id: 'makeup', icon: Sparkles },
   { id: 'wig', icon: Scissors },
+  { id: 'art', icon: Palette },
+  { id: 'props', icon: Hammer },
+  { id: 'music', icon: Music },
   { id: 'other', icon: Briefcase },
 ];
 
 export default function ServicesPage() {
   const [ads, setAds] = useState<ServiceAd[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<ServiceType>('photography');
+  const [activeTab, setActiveTab] = useState<ServiceType>('all');
   const [selectedCountry, setSelectedCountry] = useState<string>('ALL');
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [editingAd, setEditingAd] = useState<ServiceAd | null>(null);
@@ -130,9 +134,10 @@ export default function ServicesPage() {
       }
 
       try {
-        const constraints: any[] = [
-          where('type', '==', activeTab)
-        ];
+        const constraints: any[] = [];
+        if (activeTab !== 'all') {
+          constraints.push(where('type', '==', activeTab));
+        }
 
         if (selectedCountry !== 'ALL') {
           constraints.push(where('country', '==', selectedCountry));
@@ -675,6 +680,9 @@ function ComposeModal({ defaultType, editAd, onClose, onAdCreated, onAdUpdated }
                 <option value="photography" className="bg-slate-900 text-white">{t('srv.tab.photography')}</option>
                 <option value="makeup" className="bg-slate-900 text-white">{t('srv.tab.makeup')}</option>
                 <option value="wig" className="bg-slate-900 text-white">{t('srv.tab.wig')}</option>
+                <option value="art" className="bg-slate-900 text-white">{t('srv.tab.art')}</option>
+                <option value="props" className="bg-slate-900 text-white">{t('srv.tab.props')}</option>
+                <option value="music" className="bg-slate-900 text-white">{t('srv.tab.music')}</option>
                 <option value="other" className="bg-slate-900 text-white">{t('srv.tab.other')}</option>
               </select>
             </div>

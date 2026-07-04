@@ -6,6 +6,8 @@ import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { loginWithGoogle, registerWithEmail, loginWithEmail, logout } from '../lib/firebase';
 import { cn } from '../lib/utils';
+import { collection, query, where, getCountFromServer } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useTheme, ACG_THEMES } from './ThemeProvider';
 import QuotaBanner from './QuotaBanner';
 import NotificationCenter from './NotificationCenter';
@@ -19,6 +21,55 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { activeTheme, setThemeById } = useTheme();
 
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  
+  // Unread badge counts
+  const [unreadCounts, setUnreadCounts] = useState<{ activities: number; posts: number; services: number }>({ activities: 0, posts: 0, services: 0 });
+
+  useEffect(() => {
+    // Record visit time
+    if (location.pathname === '/') localStorage.setItem('last_visit_activities', String(Date.now()));
+    if (location.pathname === '/community') localStorage.setItem('last_visit_posts', String(Date.now()));
+    if (location.pathname === '/services') localStorage.setItem('last_visit_services', String(Date.now()));
+
+    // Clear local count when viewing
+    if (location.pathname === '/') setUnreadCounts(p => ({ ...p, activities: 0 }));
+    if (location.pathname === '/community') setUnreadCounts(p => ({ ...p, posts: 0 }));
+    if (location.pathname === '/services') setUnreadCounts(p => ({ ...p, services: 0 }));
+  }, [location.pathname]);
+
+  useEffect(() => {
+    // Only fetch counts once per mount to save quota
+    const fetchUnreadCounts = async () => {
+      try {
+        const lastAct = parseInt(localStorage.getItem('last_visit_activities') || '0', 10);
+        const lastPosts = parseInt(localStorage.getItem('last_visit_posts') || '0', 10);
+        const lastSvc = parseInt(localStorage.getItem('last_visit_services') || '0', 10);
+
+        // Fetch using getCountFromServer for items created after the last visit timestamp
+        // Only if they visited at least once (last != 0) to prevent huge counts on first visit
+        const newCounts = { activities: 0, posts: 0, services: 0 };
+        if (lastAct > 0) {
+          const snap = await getCountFromServer(query(collection(db, 'activities'), where('createdAt', '>', new Date(lastAct))));
+          newCounts.activities = snap.data().count;
+        }
+        if (lastPosts > 0) {
+          const snap = await getCountFromServer(query(collection(db, 'posts'), where('createdAt', '>', new Date(lastPosts))));
+          newCounts.posts = snap.data().count;
+        }
+        if (lastSvc > 0) {
+          const snap = await getCountFromServer(query(collection(db, 'services'), where('createdAt', '>', new Date(lastSvc))));
+          newCounts.services = snap.data().count;
+        }
+        setUnreadCounts(newCounts);
+      } catch (err) {
+        console.warn("Could not fetch unread counts", err);
+      }
+    };
+    if (user && !isQuotaExceeded) {
+      const t = setTimeout(fetchUnreadCounts, 2000);
+      return () => clearTimeout(t);
+    }
+  }, [user, isQuotaExceeded]);
 
   // Email login/register states
   const [emailMode, setEmailMode] = useState<'login' | 'register'>('login');
@@ -154,6 +205,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </button>
               );
             }
+            
+            const badgeCount = item.path === '/' ? unreadCounts.activities : 
+                               item.path === '/community' ? unreadCounts.posts : 
+                               item.path === '/services' ? unreadCounts.services : 0;
+            
             return (
               <Link
                 key={item.path}
@@ -165,7 +221,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     : "text-slate-500 hover:text-white hover:bg-white/5"
                 )}
               >
-                <item.icon className="w-5 h-5" />
+                <div className="relative">
+                  <item.icon className="w-5 h-5" />
+                  {badgeCount > 0 && location.pathname !== item.path && (
+                    <span className="absolute -top-1.5 -right-2 bg-pink-500 text-white text-[9px] font-bold px-1.5 min-w-[16px] h-[16px] flex items-center justify-center rounded-full border-[1.5px] border-[#141416] shadow-sm animate-fadeIn">
+                      {badgeCount > 99 ? '99+' : badgeCount}
+                    </span>
+                  )}
+                </div>
                 {item.name}
               </Link>
             );
@@ -293,6 +356,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <nav className="md:hidden fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] inset-x-4 h-16 bg-[#141416]/90 backdrop-blur-xl border border-white/10 flex items-center justify-around px-2 py-1.5 z-50 shadow-[0_12px_40px_rgba(0,0,0,0.8)] rounded-full">
         {mobileNavItems.map((item) => {
           const isActive = location.pathname === item.path && !isMoreOpen;
+          const badgeCount = item.path === '/' ? unreadCounts.activities : 
+                             item.path === '/community' ? unreadCounts.posts : 
+                             item.path === '/services' ? unreadCounts.services : 0;
           return (
             <Link
               key={item.path}
@@ -310,7 +376,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   transition={{ type: "spring", stiffness: 380, damping: 30 }}
                 />
               )}
-              <item.icon className={cn("w-5.5 h-5.5 transition-all relative z-10", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "opacity-80")} />
+              <div className="relative">
+                <item.icon className={cn("w-5.5 h-5.5 transition-all relative z-10", isActive ? "scale-110 drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]" : "opacity-80")} />
+                {badgeCount > 0 && !isActive && (
+                  <span className="absolute -top-1 -right-2 bg-pink-500 text-white text-[9px] font-bold px-1 min-w-[14px] h-[14px] flex items-center justify-center rounded-full border-[1.5px] border-[#141416] shadow-sm z-20 animate-fadeIn">
+                    {badgeCount > 99 ? '99+' : badgeCount}
+                  </span>
+                )}
+              </div>
               <span className="text-[9px] font-bold tracking-tight mt-0.5 relative z-10 truncate max-w-[55px]">{item.name}</span>
             </Link>
           );

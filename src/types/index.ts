@@ -2,7 +2,7 @@ export type UserRole = 'coser' | 'photographer' | 'makeup' | 'fan' | 'other';
 export type Gender = 'male' | 'female' | 'non-binary' | 'other' | 'prefer-not-to-say';
 export type ActivityType = 'meetup' | 'convention' | 'photoshoot';
 export type PostType = 'market' | 'tips' | 'sos' | 'social' | 'drama';
-export type ServiceType = 'photography' | 'makeup' | 'wig' | 'other';
+export type ServiceType = 'all' | 'photography' | 'makeup' | 'wig' | 'art' | 'props' | 'music' | 'other';
 
 export interface UserProfile {
   uid: string;

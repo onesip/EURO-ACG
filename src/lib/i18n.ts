@@ -112,7 +112,11 @@ export const translations: Record<Language, Record<string, string>> = {
     'srv.modal.desc': 'Describe your service, experience, and pricing...',
     'srv.modal.submit': 'Post Ad',
     'srv.modal.submitting': 'Posting...',
+    'srv.tab.all': 'All Services',
     'srv.tab.photography': 'Photography',
+    'srv.tab.art': 'Art Commission',
+    'srv.tab.props': 'Props Making',
+    'srv.tab.music': 'Music Production',
     'srv.tab.makeup': 'Makeup & Styling',
     'srv.tab.wig': 'Wig Styling',
     'srv.tab.other': 'Other Services'
@@ -228,7 +232,11 @@ export const translations: Record<Language, Record<string, string>> = {
     'srv.modal.desc': '描述你的业务范围、经验、价格以及档期...',
     'srv.modal.submit': '张贴海报',
     'srv.modal.submitting': '粘贴中...',
+    'srv.tab.all': '次元总览',
     'srv.tab.photography': '法师约拍',
+    'srv.tab.art': '灵魂画师',
+    'srv.tab.props': '炼金道具',
+    'srv.tab.music': '天籁歌姬',
     'srv.tab.makeup': '神仙妆娘',
     'srv.tab.wig': '手作毛娘',
     'srv.tab.other': '其他绝活'
