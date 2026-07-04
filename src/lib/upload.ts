@@ -17,7 +17,6 @@ const compressImage = (file: File, maxWidth = 1000, maxHeight = 1000, quality = 
     reader.readAsDataURL(file);
     reader.onload = (event) => {
       const img = new Image();
-      img.src = event.target?.result as string;
       img.onload = () => {
         let width = img.width;
         let height = img.height;
@@ -59,6 +58,7 @@ const compressImage = (file: File, maxWidth = 1000, maxHeight = 1000, quality = 
         );
       };
       img.onerror = () => resolve(file);
+      img.src = event.target?.result as string;
     };
     reader.onerror = () => resolve(file);
   });

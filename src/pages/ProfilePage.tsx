@@ -35,6 +35,7 @@ export default function ProfilePage() {
 
   // Friends & Requests State
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
   const [friendsList, setFriendsList] = useState<any[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
 
@@ -54,6 +55,34 @@ export default function ProfilePage() {
         ...docSnap.data()
       }));
       setIncomingRequests(reqs);
+
+      // 1b. Fetch pending outgoing requests (requests sent by current user)
+      const qSent = query(
+        collection(db, 'friendRequests'),
+        where('fromId', '==', user.uid),
+        where('status', '==', 'pending')
+      );
+      const snapSent = await getDocs(qSent);
+      const sentList = [];
+      for (const d of snapSent.docs) {
+        const data = d.data();
+        try {
+          const uSnap = await getDoc(doc(db, 'users', data.toId));
+          if (uSnap.exists()) {
+            const uData = uSnap.data();
+            sentList.push({
+              id: d.id,
+              toId: data.toId,
+              toName: uData.displayName || (lang === 'zh' ? '次元同好' : 'Moyu Pal'),
+              toPhoto: uData.photoURL || '',
+              role: uData.role || 'other'
+            });
+          }
+        } catch (e) {
+          console.error("Error fetching target profile for sent request:", e);
+        }
+      }
+      setOutgoingRequests(sentList);
 
       // 2. Fetch friends list from subcollection
       const friendsRef = collection(db, 'users', user.uid, 'friends');
@@ -288,59 +317,57 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between border-b border-white/5 pb-3">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-indigo-400" />
-            <h2 className="text-lg font-semibold text-white">
-              {lang === 'zh' ? '🤝 我的二次元死党与请求' : '🤝 My Friends & Requests'}
+            <h2 className="text-base font-semibold text-white">
+              {lang === 'zh' ? '🤝 次元绊 · 同好契约' : '🤝 ACG Bonds & Contracts'}
             </h2>
           </div>
           <button
             onClick={fetchFriendsAndRequests}
             disabled={loadingFriends}
-            className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-white/5 rounded-lg transition-colors flex items-center gap-1 text-xs"
-            title={lang === 'zh' ? '刷新好友列表' : 'Refresh list'}
+            className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-white/5 rounded-lg transition-colors flex items-center gap-1 text-[11px]"
+            title={lang === 'zh' ? '刷新契约列表' : 'Sync contracts'}
           >
             <RefreshCw className={cn("w-3.5 h-3.5", loadingFriends && "animate-spin")} />
-            <span>{lang === 'zh' ? '同步好友' : 'Sync'}</span>
+            <span>{lang === 'zh' ? '同步契约' : 'Sync'}</span>
           </button>
         </div>
 
         {/* 1. Pending Incoming Requests */}
         {incomingRequests.length > 0 && (
           <div className="space-y-3 bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/20">
-            <h3 className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+            <h3 className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
               <UserCheck className="w-4 h-4" />
-              {lang === 'zh' ? `收到新死党请求 (${incomingRequests.length})` : `New Friend Requests (${incomingRequests.length})`}
+              {lang === 'zh' ? `💌 收到申请 (${incomingRequests.length})` : `Incoming Requests (${incomingRequests.length})`}
             </h3>
-            <div className="grid gap-3">
+            <div className="grid gap-2">
               {incomingRequests.map((req) => (
                 <div key={req.id} className="flex items-center justify-between bg-[#1b1c23] p-3 rounded-xl border border-white/5">
                   <div className="flex items-center gap-3">
                     <img
                       src={req.fromPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.fromId}`}
                       alt="Avatar"
-                      className="w-9 h-9 rounded-full object-cover border border-white/10"
+                      className="w-8 h-8 rounded-full object-cover border border-white/10"
                     />
                     <div>
-                      <p className="text-sm font-semibold text-white">{req.fromName || (lang === 'zh' ? '神秘萌友' : 'Moyu Fan')}</p>
-                      <p className="text-[10px] text-slate-500">
-                        {lang === 'zh' ? '请求与你结为死党' : 'Wants to add you as a friend'}
+                      <p className="text-xs font-medium text-white">{req.fromName || (lang === 'zh' ? '神秘同好' : 'Moyu Pal')}</p>
+                      <p className="text-[10px] text-slate-400">
+                        {lang === 'zh' ? '想要与你缔结死党契约' : 'Wants to form a pal contract'}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleAcceptRequest(req.id, req.fromId)}
-                      className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-xs px-2.5"
-                      title={lang === 'zh' ? '同意' : 'Accept'}
+                      className="p-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md transition-colors flex items-center gap-1 text-[10px] px-2.5"
                     >
-                      <Check className="w-3.5 h-3.5" />
+                      <Check className="w-3 h-3" />
                       <span>{lang === 'zh' ? '同意' : 'Accept'}</span>
                     </button>
                     <button
                       onClick={() => handleDeclineRequest(req.id)}
-                      className="p-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-xs px-2.5"
-                      title={lang === 'zh' ? '拒绝' : 'Decline'}
+                      className="p-1 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-md transition-colors flex items-center gap-1 text-[10px] px-2.5"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-3 h-3" />
                       <span>{lang === 'zh' ? '拒绝' : 'Decline'}</span>
                     </button>
                   </div>
@@ -350,12 +377,44 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {/* 1b. Pending Outgoing Requests */}
+        {outgoingRequests.length > 0 && (
+          <div className="space-y-3 bg-white/[0.01] p-4 rounded-2xl border border-white/5">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🕊️</span>
+              {lang === 'zh' ? `已发出申请 (${outgoingRequests.length})` : `Sent Requests (${outgoingRequests.length})`}
+            </h3>
+            <div className="grid gap-2">
+              {outgoingRequests.map((req) => (
+                <div key={req.id} className="flex items-center justify-between bg-[#17181e]/60 p-3 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={req.toPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.toId}`}
+                      alt="Avatar"
+                      className="w-8 h-8 rounded-full object-cover border border-white/10"
+                    />
+                    <div>
+                      <p className="text-xs font-medium text-white">{req.toName}</p>
+                      <p className="text-[10px] text-slate-500 italic">
+                        {lang === 'zh' ? '契约传送中，等候同好回应...' : 'Awaiting confirmation...'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
+                    {lang === 'zh' ? '等待中' : 'Pending'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* 2. My Friends List */}
         <div>
-          <h3 className="text-sm font-semibold text-slate-400 mb-3 flex items-center gap-1.5">
+          <h3 className="text-xs font-bold text-slate-400 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
             <span>👥</span>
-            {lang === 'zh' ? '我的死党列表' : 'My Friends'}
-            <span className="text-xs text-slate-500 font-normal">({friendsList.length})</span>
+            {lang === 'zh' ? '已缔结死党' : 'My Friends'}
+            <span className="text-[11px] text-indigo-400 font-normal ml-1">({friendsList.length})</span>
           </h3>
 
           {loadingFriends ? (
@@ -370,33 +429,33 @@ export default function ProfilePage() {
                     <img
                       src={friend.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.uid}`}
                       alt="Avatar"
-                      className="w-10 h-10 rounded-full object-cover border border-white/10"
+                      className="w-9 h-9 rounded-full object-cover border border-white/10"
                     />
                     <div>
-                      <p className="text-sm font-semibold text-white">{friend.displayName}</p>
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 capitalize">
+                      <p className="text-xs font-semibold text-white">{friend.displayName}</p>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 capitalize mt-1 inline-block">
                         {friend.role === 'coser' ? (lang === 'zh' ? 'Coser' : 'Coser') :
                          friend.role === 'photographer' ? (lang === 'zh' ? '摄影' : 'Photographer') :
                          friend.role === 'makeup' ? (lang === 'zh' ? '妆造' : 'Makeup Artist') :
-                         friend.role === 'fan' ? (lang === 'zh' ? '同好' : 'ACG Fan') : (lang === 'zh' ? '次元行者' : 'Adventurer')}
+                         friend.role === 'fan' ? (lang === 'zh' ? '同好' : 'ACG Fan') : (lang === 'zh' ? '同好' : 'Moyu Pal')}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => navigate(`/community?friend=${friend.uid}`)}
-                      className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors flex items-center justify-center gap-1 text-xs font-medium px-3"
-                      title={lang === 'zh' ? '去聊天' : 'Chat'}
+                      className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center justify-center gap-1 text-[10px] px-2.5 font-medium"
+                      title={lang === 'zh' ? '去私聊' : 'Chat'}
                     >
-                      <MessageSquare className="w-3.5 h-3.5" />
+                      <MessageSquare className="w-3 h-3" />
                       <span>{lang === 'zh' ? '私聊' : 'Chat'}</span>
                     </button>
                     <button
                       onClick={() => handleRemoveFriend(friend.uid)}
-                      className="p-2 text-slate-500 hover:text-rose-400 hover:bg-white/5 rounded-xl transition-colors"
-                      title={lang === 'zh' ? '删除好友' : 'Remove friend'}
+                      className="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-white/5 rounded-lg transition-colors"
+                      title={lang === 'zh' ? '解约' : 'Remove pal'}
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
@@ -404,9 +463,9 @@ export default function ProfilePage() {
             </div>
           ) : (
             <div className="py-8 text-center text-slate-500 text-xs bg-white/[0.01] rounded-2xl border border-dashed border-white/5 px-4">
-              <p className="mb-2">👻 {lang === 'zh' ? '你还没有添加任何二次元死党哦' : 'No friends added yet'}</p>
+              <p className="mb-2">👻 {lang === 'zh' ? '身边还没有缔结契约的死党哦~' : 'No friend contracts made yet'}</p>
               <p className="text-slate-600 max-w-md mx-auto leading-relaxed">
-                {lang === 'zh' ? '可以前往「社区交流」或活动、同城集市中，点击其他同好的头像，在个人卡片中加他们为好友！' : 'Go to Community or Marketplace, click on avatars and send friend requests!'}
+                {lang === 'zh' ? '可以前往「社区交流」或活动、集市中点击其他同好的头像，在个人卡片里发送死党契约请求吧！' : 'Head over to Community or Marketplace to meet new pals and send request!'}
               </p>
             </div>
           )}

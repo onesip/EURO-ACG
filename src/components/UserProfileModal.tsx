@@ -394,13 +394,13 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95"
                       >
                         <UserPlus className="w-4 h-4" />
-                        {lang === 'zh' ? '加个好友' : 'Add Friend'}
+                        {lang === 'zh' ? '缔结死党契约' : 'Form Pal Contract'}
                       </button>
                     )}
                     {friendStatus === 'pending_sent' && (
                       <button className="flex items-center gap-2 px-4 py-2 bg-white/10 text-slate-300 rounded-xl text-sm font-bold cursor-default">
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        {lang === 'zh' ? '已发送请求' : 'Request Sent'}
+                        {lang === 'zh' ? '契约传送中...' : 'Request Sent'}
                       </button>
                     )}
                     {friendStatus === 'pending_received' && (
@@ -409,13 +409,13 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                         className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all shadow-lg active:scale-95 animate-pulse"
                       >
                         <UserCheck className="w-4 h-4" />
-                        {lang === 'zh' ? '通过好友请求' : 'Accept Friend'}
+                        {lang === 'zh' ? '同意缔结契约' : 'Accept Contract'}
                       </button>
                     )}
                     {friendStatus === 'friends' && (
                       <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-sm font-bold">
-                        <Heart className="w-4 h-4 fill-indigo-400" />
-                        {lang === 'zh' ? '已是同好好友' : 'Friends'}
+                        <Heart className="w-4 h-4 fill-indigo-400 animate-pulse" />
+                        {lang === 'zh' ? '已缔结死党绊' : 'Bonded Pals'}
                       </div>
                     )}
                   </div>
