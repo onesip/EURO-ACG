@@ -1,3 +1,8 @@
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { app } from './firebase';
+
+const storage = getStorage(app);
+
 const compressImage = (file: File, maxWidth = 1000, maxHeight = 1000, quality = 0.75): Promise<File> => {
   return new Promise((resolve) => {
     if (typeof window === 'undefined' || !window.FileReader || !window.HTMLCanvasElement) {
@@ -63,6 +68,21 @@ export const uploadToPngLog = async (rawFile: File): Promise<string> => {
   // Compress image on client side first to save bandwidth and avoid size-limit issues
   const file = await compressImage(rawFile);
 
+  // 1. Primary Attempt: Native Firebase Storage
+  try {
+    console.log('[Upload] Attempting native Firebase Storage upload...');
+    const uniqueName = `uploads/${Date.now()}_${Math.random().toString(36).substring(2, 8)}_${file.name}`;
+    const storageRef = ref(storage, uniqueName);
+    
+    await uploadBytes(storageRef, file);
+    const downloadUrl = await getDownloadURL(storageRef);
+    console.log('[Upload] Firebase Storage upload success:', downloadUrl);
+    return downloadUrl;
+  } catch (firebaseError: any) {
+    console.warn('[Upload] Firebase Storage upload failed/unconfigured, trying fallback proxy:', firebaseError.message || firebaseError);
+  }
+
+  // 2. Secondary Attempt: Express Server Proxy Fallback (which uses Catbox and PngLog)
   // Convert to Base64
   const toBase64 = (f: File): Promise<string> => new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -72,6 +92,7 @@ export const uploadToPngLog = async (rawFile: File): Promise<string> => {
   });
 
   try {
+    console.log('[Upload] Attempting server proxy upload fallback...');
     const base64Image = await toBase64(file);
     
     const res = await fetch('/api/upload-base64', {
@@ -94,10 +115,11 @@ export const uploadToPngLog = async (rawFile: File): Promise<string> => {
     const data = await res.json();
     
     if (data.url) {
+      console.log('[Upload] Server proxy upload success:', data.url);
       return data.url;
     }
     
-    throw new Error('Image upload failed: No URL returned');
+    throw new Error('Image upload failed: No URL returned from server proxy');
   } catch (error: any) {
     console.error('Upload Error:', error);
     throw new Error(error.message || 'Image upload failed. Please try again later.');
