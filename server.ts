@@ -33,31 +33,9 @@ async function startServer() {
 
       console.log(`[Upload] Received Base64 image: ${name} (${buffer.length} bytes)`);
 
-      // 1. Try Catbox (High reliability)
+      // 1. Try PngLog first (Chinese-friendly and specifically requested by user)
       try {
-        const catboxFormData = new FormData();
-        catboxFormData.append("reqtype", "fileupload");
-        const catboxBlob = new Blob([buffer], { type });
-        catboxFormData.append("fileToUpload", catboxBlob, name);
-
-        const catboxRes = await fetch("https://catbox.moe/user/api.php", {
-          method: "POST",
-          body: catboxFormData,
-        });
-
-        if (catboxRes.ok) {
-          const url = await catboxRes.text();
-          if (url && url.startsWith("http")) {
-            console.log("[Upload] Catbox Success:", url);
-            return res.json({ url });
-          }
-        }
-      } catch (e) {
-        console.warn("[Upload] Catbox failed");
-      }
-
-      // 2. Fallback to PngLog
-      try {
+        console.log("[Upload] Attempting PngLog upload...");
         const formData = new FormData();
         const blob = new Blob([buffer], { type });
         formData.append("file", blob, name);
@@ -66,18 +44,86 @@ async function startServer() {
           method: "POST",
           headers: {
             "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
           body: formData,
         });
 
-        const data = await response.json();
-        if (data.status && data.data?.links?.url) {
-          console.log("[Upload] PngLog Success:", data.data.links.url);
-          return res.json({ url: data.data.links.url });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status && data.data?.links?.url) {
+            console.log("[Upload] PngLog Success:", data.data.links.url);
+            return res.json({ url: data.data.links.url });
+          } else {
+            console.warn("[Upload] PngLog responded with error structure:", data);
+          }
+        } else {
+          console.warn(`[Upload] PngLog non-ok response status: ${response.status}`);
         }
-      } catch (e) {
-        console.warn("[Upload] PngLog failed");
+      } catch (e: any) {
+        console.warn("[Upload] PngLog exception:", e.message || e);
+      }
+
+      // 2. Try Telegra.ph (Ultra-fast, global, extremely stable)
+      try {
+        console.log("[Upload] Attempting Telegra.ph upload...");
+        const teleFormData = new FormData();
+        const teleBlob = new Blob([buffer], { type });
+        teleFormData.append("file", teleBlob, name);
+
+        const teleRes = await fetch("https://telegra.ph/upload", {
+          method: "POST",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          },
+          body: teleFormData,
+        });
+
+        if (teleRes.ok) {
+          const data = await teleRes.json();
+          if (Array.isArray(data) && data[0] && data[0].src) {
+            const url = `https://telegra.ph${data[0].src}`;
+            console.log("[Upload] Telegra.ph Success:", url);
+            return res.json({ url });
+          } else {
+            console.warn("[Upload] Telegra.ph unexpected response structure:", data);
+          }
+        } else {
+          console.warn(`[Upload] Telegra.ph non-ok response status: ${teleRes.status}`);
+        }
+      } catch (e: any) {
+        console.warn("[Upload] Telegra.ph exception:", e.message || e);
+      }
+
+      // 3. Try Catbox (High reliability fallback)
+      try {
+        console.log("[Upload] Attempting Catbox upload...");
+        const catboxFormData = new FormData();
+        catboxFormData.append("reqtype", "fileupload");
+        const catboxBlob = new Blob([buffer], { type });
+        catboxFormData.append("fileToUpload", catboxBlob, name);
+
+        const catboxRes = await fetch("https://catbox.moe/user/api.php", {
+          method: "POST",
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          },
+          body: catboxFormData,
+        });
+
+        if (catboxRes.ok) {
+          const url = await catboxRes.text();
+          if (url && url.startsWith("http")) {
+            console.log("[Upload] Catbox Success:", url);
+            return res.json({ url });
+          } else {
+            console.warn("[Upload] Catbox unexpected text response:", url);
+          }
+        } else {
+          console.warn(`[Upload] Catbox non-ok response status: ${catboxRes.status}`);
+        }
+      } catch (e: any) {
+        console.warn("[Upload] Catbox exception:", e.message || e);
       }
 
       throw new Error("所有上传服务暂时不可用，请稍后再试 (All upload services failed)");
