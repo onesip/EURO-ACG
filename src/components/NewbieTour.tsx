@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Gamepad2, ChevronRight, X, Sparkles, MapPin, MessageSquare, Camera, ShoppingBag } from 'lucide-react';
+import { Gamepad2, ChevronRight, X, Sparkles, MapPin, MessageSquare, Camera, ShoppingBag, Users, Image as ImageIcon, UserCircle, LogIn } from 'lucide-react';
 
 // Steps for the tour
 const TOUR_STEPS = [
@@ -9,7 +9,7 @@ const TOUR_STEPS = [
     title: '面基行动',
     desc: '找搭子、组团去漫展、跑团约饭都在这里！',
     icon: MapPin,
-    mobilePos: { bottom: '100px', left: '10%' },
+    mobilePos: { bottom: '100px', left: '10%', transform: 'translateX(-50%)' },
     desktopPos: { top: '150px', left: '270px' }
   },
   {
@@ -17,7 +17,7 @@ const TOUR_STEPS = [
     title: '摸鱼广场',
     desc: '日常吐个槽，发个二次元段子，扩列吹水~',
     icon: MessageSquare,
-    mobilePos: { bottom: '100px', left: '30%' },
+    mobilePos: { bottom: '100px', left: '30%', transform: 'translateX(-50%)' },
     desktopPos: { top: '210px', left: '270px' }
   },
   {
@@ -25,7 +25,7 @@ const TOUR_STEPS = [
     title: '神仙产粮',
     desc: '约毛娘、妆娘、摄影后期？这里全是大佬！',
     icon: Camera,
-    mobilePos: { bottom: '100px', left: '50%' },
+    mobilePos: { bottom: '100px', left: '50%', transform: 'translateX(-50%)' },
     desktopPos: { top: '270px', left: '270px' }
   },
   {
@@ -33,8 +33,24 @@ const TOUR_STEPS = [
     title: '回血集市',
     desc: '吃土了？二手Cos服、谷子、手办快来回血！',
     icon: ShoppingBag,
-    mobilePos: { bottom: '100px', left: '70%' },
+    mobilePos: { bottom: '100px', left: '70%', transform: 'translateX(-50%)' },
     desktopPos: { top: '330px', left: '270px' }
+  },
+  {
+    id: 'more',
+    title: '探索更多',
+    desc: '点击右下角的“更多”，可以找到次元羁绊册（同好名册）和再次打开本新手攻略哦！',
+    icon: Sparkles,
+    mobilePos: { bottom: '100px', left: '90%', transform: 'translateX(-50%)' },
+    desktopPos: { top: '390px', left: '270px' }
+  },
+  {
+    id: 'profile',
+    title: '个性化装扮与登录',
+    desc: '点击右上角头像（或侧边栏底部），登录注册后，就能更换专属头像、修改资料和切换深浅主题皮肤啦！快来打造你的次元专属身份！',
+    icon: UserCircle,
+    mobilePos: { top: '60px', right: '16px' },
+    desktopPos: { bottom: '20px', left: '270px' }
   }
 ];
 
@@ -55,7 +71,17 @@ export function NewbieTour() {
     const checkMobile = () => setIsMobile(window.innerWidth < 768);
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+
+    const handleStartTour = () => {
+      setIsActive(true);
+      setCurrentStep(0);
+    };
+    window.addEventListener('start_newbie_tour', handleStartTour);
+
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      window.removeEventListener('start_newbie_tour', handleStartTour);
+    };
   }, []);
 
   const handleNext = () => {
@@ -117,6 +143,8 @@ export function NewbieTour() {
               if (idx !== currentStep) return null;
               
               const Icon = step.icon;
+              const posStyle = isMobile ? step.mobilePos : step.desktopPos;
+              const hasTopArrow = isMobile && step.mobilePos.top !== undefined;
 
               return (
                 <motion.div
@@ -126,18 +154,20 @@ export function NewbieTour() {
                   exit={{ opacity: 0, scale: 0.8, y: 20 }}
                   transition={{ type: 'spring', damping: 20, stiffness: 300 }}
                   className="absolute flex flex-col pointer-events-auto"
-                  style={
-                    isMobile 
-                      ? { bottom: step.mobilePos.bottom, left: step.mobilePos.left, transform: 'translateX(-50%)' } 
-                      : { top: step.desktopPos.top, left: step.desktopPos.left }
-                  }
+                  style={posStyle as any}
                 >
                   <div className="relative bg-gradient-to-br from-[#1c1c22] to-[#141416] border border-indigo-500/30 p-4 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.5),0_0_20px_rgba(99,102,241,0.2)] w-64 md:w-72">
                     {/* Cute pointing triangle */}
                     {isMobile ? (
-                      <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[12px] border-r-[12px] border-t-[12px] border-l-transparent border-r-transparent border-t-indigo-500/30">
-                        <div className="absolute -top-[13px] -left-[11px] w-0 h-0 border-l-[11px] border-r-[11px] border-t-[11px] border-l-transparent border-r-transparent border-t-[#141416]" />
-                      </div>
+                      hasTopArrow ? (
+                        <div className="absolute -top-3 right-4 w-0 h-0 border-l-[12px] border-r-[12px] border-b-[12px] border-l-transparent border-r-transparent border-b-indigo-500/30">
+                          <div className="absolute top-[2px] -left-[11px] w-0 h-0 border-l-[11px] border-r-[11px] border-b-[11px] border-l-transparent border-r-transparent border-b-[#141416]" />
+                        </div>
+                      ) : (
+                        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-0 h-0 border-l-[12px] border-r-[12px] border-t-[12px] border-l-transparent border-r-transparent border-t-indigo-500/30">
+                          <div className="absolute -top-[13px] -left-[11px] w-0 h-0 border-l-[11px] border-r-[11px] border-t-[11px] border-l-transparent border-r-transparent border-t-[#141416]" />
+                        </div>
+                      )
                     ) : (
                       <div className="absolute top-1/2 -left-3 -translate-y-1/2 w-0 h-0 border-t-[12px] border-b-[12px] border-r-[12px] border-t-transparent border-b-transparent border-r-indigo-500/30">
                         <div className="absolute -top-[11px] -right-[13px] w-0 h-0 border-t-[11px] border-b-[11px] border-r-[11px] border-t-transparent border-b-transparent border-r-[#141416]" />

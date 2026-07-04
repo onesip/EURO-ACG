@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, X, Sparkles, Palette, Mail, Lock, User, RefreshCw, Users, Menu as MenuIcon } from 'lucide-react';
+import { Calendar, MessageSquare, ShoppingBag, User as UserIcon, LogIn, LogOut, Globe, Camera, BookOpen, Gamepad2, X, Sparkles, Palette, Mail, Lock, User, RefreshCw, Users, Menu as MenuIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
@@ -141,21 +141,35 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
         
         <nav className="flex-1 px-4 space-y-2">
-          {navItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-xl transition-colors",
-                location.pathname === item.path 
-                  ? "bg-indigo-500/10 text-indigo-400 font-medium" 
-                  : "text-slate-500 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <item.icon className="w-5 h-5" />
-              {item.name}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            if (item.path === '/guide') {
+              return (
+                <button
+                  key={item.path}
+                  onClick={() => window.dispatchEvent(new CustomEvent('start_newbie_tour'))}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-slate-500 hover:text-white hover:bg-white/5 text-left"
+                >
+                  <Gamepad2 className="w-5 h-5" />
+                  {lang === 'zh' ? '新手攻略' : 'Newbie Tour'}
+                </button>
+              );
+            }
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl transition-colors",
+                  location.pathname === item.path 
+                    ? "bg-indigo-500/10 text-indigo-400 font-medium" 
+                    : "text-slate-500 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <item.icon className="w-5 h-5" />
+                {item.name}
+              </Link>
+            );
+          })}
           {user && (
             <Link
               to="/profile"
@@ -207,10 +221,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content */}
-      <main className="max-w-3xl mx-auto px-4 py-6 pt-20 pb-28 md:px-8 md:py-8 md:pt-20 md:pb-8">
+      <main className="max-w-3xl w-full mx-auto px-4 py-6 pt-[calc(5rem+env(safe-area-inset-top))] pb-[calc(7rem+env(safe-area-inset-bottom))] md:px-8 md:py-8 md:pt-20 md:pb-8">
         <QuotaBanner />
         {/* Responsive Header Banner */}
-        <div className="fixed top-0 inset-x-0 md:left-64 h-14 bg-[#141416]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 md:px-8 z-40">
+        <div className="fixed top-0 inset-x-0 md:left-64 pt-[env(safe-area-inset-top)] h-[calc(3.5rem+env(safe-area-inset-top))] bg-[#141416]/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-4 md:px-8 z-40">
            <div className="flex items-center gap-2">
              <h1 className="text-lg font-bold tracking-tight text-white md:hidden">EUROACG</h1>
              {user && (
@@ -271,7 +285,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </main>
 
       {/* Bottom Nav for Mobile */}
-      <nav className="md:hidden fixed bottom-5 inset-x-4 h-16 bg-[#141416]/90 backdrop-blur-xl border border-white/10 flex items-center justify-around px-2 py-1.5 z-50 shadow-[0_12px_40px_rgba(0,0,0,0.8)] rounded-full">
+      <nav className="md:hidden fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom))] inset-x-4 h-16 bg-[#141416]/90 backdrop-blur-xl border border-white/10 flex items-center justify-around px-2 py-1.5 z-50 shadow-[0_12px_40px_rgba(0,0,0,0.8)] rounded-full">
         {mobileNavItems.map((item) => {
           const isActive = location.pathname === item.path && !isMoreOpen;
           return (
@@ -431,21 +445,23 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </div>
                   </Link>
 
-                  <Link
-                    to="/guide"
-                    onClick={() => setIsMoreOpen(false)}
-                    className="p-4 bg-[#141416] border border-white/5 rounded-2xl flex flex-col gap-2 hover:border-indigo-500/30 transition-colors shadow-lg active:scale-95 duration-200"
+                  <button
+                    onClick={() => {
+                      setIsMoreOpen(false);
+                      window.dispatchEvent(new CustomEvent('start_newbie_tour'));
+                    }}
+                    className="p-4 bg-[#141416] border border-white/5 rounded-2xl flex flex-col gap-2 hover:border-indigo-500/30 transition-colors shadow-lg active:scale-95 duration-200 text-left"
                   >
                     <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
-                      <BookOpen className="w-5 h-5" />
+                      <Gamepad2 className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-bold text-white text-xs">{t('nav.guide')}</h4>
+                      <h4 className="font-bold text-white text-xs">{lang === 'zh' ? '新手攻略' : 'Newbie Tour'}</h4>
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        {lang === 'zh' ? '抱团面基求生攻略' : 'ACG Survival Guide'}
+                        {lang === 'zh' ? '查看怎么玩转欧洲ACG' : 'How to use this app'}
                       </p>
                     </div>
-                  </Link>
+                  </button>
                 </div>
 
                 {/* App Settings */}
