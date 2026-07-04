@@ -489,14 +489,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     </span>
                     <LanguageToggle />
                   </div>
-
-                  <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 text-xs">
-                    <span className="text-slate-300 font-medium flex items-center gap-1.5">
-                      <Globe className="w-4 h-4 text-slate-400" />
-                      {lang === 'zh' ? '切换当前语言' : 'Language'}
-                    </span>
-                    <LanguageToggle />
-                  </div>
                 </div>
               </div>
             </motion.div>
