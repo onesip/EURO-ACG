@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, MessageSquare, Sparkles, Volume2, HelpCircle, Heart, ChevronRight, ChevronLeft } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, useDragControls } from 'motion/react';
+import { X, MessageSquare, Sparkles, Volume2, HelpCircle, Heart, ChevronRight, ChevronLeft, Move } from 'lucide-react';
 import { useLanguage } from './LanguageProvider';
 import MascotSticker, { StickerExpression, STICKER_META } from './MascotSticker';
 import { cn } from '../lib/utils';
@@ -53,6 +53,10 @@ export default function MascotCompanion() {
   const [currentIdx, setCurrentIdx] = useState<number>(0);
   const [showSpeech, setShowSpeech] = useState<boolean>(true);
   const [isHovered, setIsHovered] = useState<boolean>(false);
+  const dragControls = useDragControls();
+  const [isDragging, setIsDragging] = useState(false);
+  const [isEdgeHidden, setIsEdgeHidden] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     localStorage.setItem('mascot_companion_minimized', String(isMinimized));
@@ -60,7 +64,7 @@ export default function MascotCompanion() {
 
   // Periodically prompt cute speeches if expanded
   useEffect(() => {
-    if (isMinimized) return;
+    if (isMinimized || isEdgeHidden) return;
 
     const timer = setInterval(() => {
       // 30% chance to say something new
@@ -77,20 +81,25 @@ export default function MascotCompanion() {
     }, 15000);
 
     return () => clearInterval(timer);
-  }, [isMinimized, currentIdx]);
+  }, [isMinimized, currentIdx, isEdgeHidden]);
 
   // Auto show a speech bubble on initial load
   useEffect(() => {
-    if (!isMinimized) {
+    if (!isMinimized && !isEdgeHidden) {
       setShowSpeech(true);
       const fadeTimer = setTimeout(() => {
         setShowSpeech(false);
       }, 7000);
       return () => clearTimeout(fadeTimer);
     }
-  }, [isMinimized]);
+  }, [isMinimized, isEdgeHidden]);
 
   const handleMascotClick = () => {
+    if (isDragging) return;
+    if (isEdgeHidden) {
+      setIsEdgeHidden(false);
+      return;
+    }
     // Cycle expression
     const nextIdx = (currentIdx + 1) % DIALOGUES.length;
     setCurrentIdx(nextIdx);
@@ -115,23 +124,52 @@ export default function MascotCompanion() {
     }
   };
 
+  const handleDragEnd = (event: any, info: any) => {
+    setIsDragging(false);
+    // Hide if dropped near the very right edge of screen
+    if (!isMinimized && info.point.x > window.innerWidth - 60) {
+      setIsEdgeHidden(true);
+      setShowSpeech(false);
+    } else {
+      setIsEdgeHidden(false);
+    }
+  };
+
   const activeDialog = DIALOGUES[currentIdx];
   const activeExpression = activeDialog.expression;
 
   return (
-    <div className="fixed bottom-5 right-5 z-[80] flex flex-col items-end pointer-events-none font-sans">
+    <motion.div 
+      drag
+      dragConstraints={{ left: -window.innerWidth + 100, right: 0, top: -window.innerHeight + 100, bottom: 0 }}
+      dragMomentum={false}
+      onDragStart={() => setIsDragging(true)}
+      onDragEnd={handleDragEnd}
+      animate={{ 
+        x: (isEdgeHidden && !isMinimized) ? 40 : 0, 
+        opacity: (isEdgeHidden && !isHovered && !isMinimized) ? 0.5 : 1 
+      }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className={cn(
+        "fixed bottom-5 right-5 z-[80] flex flex-col items-end font-sans transition-opacity cursor-grab active:cursor-grabbing",
+        isEdgeHidden && "right-0" // stick to edge if hidden
+      )}
+      style={{ touchAction: 'none' }}
+      ref={containerRef}
+    >
       <AnimatePresence>
         {/* Expanded View */}
         {!isMinimized && (
           <div className="flex flex-col items-end gap-2.5 max-w-[280px] sm:max-w-[320px]">
             {/* Speech Bubble Dialog */}
             <AnimatePresence>
-              {showSpeech && (
+              {showSpeech && !isEdgeHidden && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.8, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.8, y: 5 }}
-                  className="bg-[#1b1c23]/95 border border-indigo-500/30 text-xs text-slate-200 p-3.5 rounded-2xl shadow-[0_4px_25px_rgba(99,102,241,0.2)] relative pointer-events-auto select-none"
+                  className="bg-[#1b1c23]/95 border border-indigo-500/30 text-xs text-slate-200 p-3.5 rounded-2xl shadow-[0_4px_25px_rgba(99,102,241,0.2)] relative select-none cursor-default"
+                  onPointerDown={(e) => e.stopPropagation()}
                 >
                   {/* Speech arrow */}
                   <div className="absolute right-6 -bottom-1.5 w-3 h-3 bg-[#1b1c23] border-r border-b border-indigo-500/30 transform rotate-45" />
@@ -166,14 +204,15 @@ export default function MascotCompanion() {
               exit={{ scale: 0, opacity: 0 }}
               onHoverStart={() => setIsHovered(true)}
               onHoverEnd={() => setIsHovered(false)}
-              className="flex items-center gap-3 pointer-events-auto"
+              className="flex items-center gap-3"
             >
               {/* Interaction tools / mood indicators */}
-              {isHovered && (
+              {isHovered && !isEdgeHidden && !isDragging && (
                 <motion.div
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   className="bg-black/60 border border-white/5 backdrop-blur-md p-1.5 rounded-xl flex flex-col gap-1 shadow-lg"
+                  onPointerDown={(e) => e.stopPropagation()}
                 >
                   {DIALOGUES.map((dialog, index) => (
                     <button
@@ -198,15 +237,18 @@ export default function MascotCompanion() {
               <div className="relative group">
                 <button
                   onClick={handleMascotClick}
-                  className="relative p-1 bg-gradient-to-br from-indigo-500/30 via-pink-500/20 to-teal-400/20 rounded-full shadow-[0_4px_25px_rgba(99,102,241,0.35)] hover:shadow-[0_4px_30px_rgba(244,114,182,0.45)] hover:scale-105 active:scale-95 transition-all duration-300"
-                  title={lang === 'zh' ? '戳我换心情~' : 'Poke me for new vibes!'}
+                  className={cn(
+                    "relative p-1 bg-gradient-to-br from-indigo-500/30 via-pink-500/20 to-teal-400/20 rounded-full shadow-[0_4px_25px_rgba(99,102,241,0.35)] transition-all duration-300 cursor-pointer",
+                    !isEdgeHidden && "hover:shadow-[0_4px_30px_rgba(244,114,182,0.45)] hover:scale-105 active:scale-95"
+                  )}
+                  title={isEdgeHidden ? (lang === 'zh' ? '点击唤醒' : 'Click to wake') : (lang === 'zh' ? '戳我换心情~' : 'Poke me for new vibes!')}
                 >
                   {/* Glowing halo ring */}
                   <div className="absolute inset-0 bg-gradient-to-r from-pink-500 via-indigo-500 to-teal-400 rounded-full opacity-35 group-hover:opacity-75 blur-md animate-pulse transition-opacity pointer-events-none" />
                   
                   {/* Core Sticker */}
                   <MascotSticker
-                    expression={activeExpression}
+                    expression={isEdgeHidden ? 'sleep' : activeExpression}
                     size="sm"
                     showLabel={false}
                     className="relative z-10 w-12 h-12 sm:w-14 sm:h-14 border-2 border-white/10"
@@ -214,13 +256,19 @@ export default function MascotCompanion() {
                 </button>
 
                 {/* Minimize Companion Button */}
-                <button
-                  onClick={() => setIsMinimized(true)}
-                  className="absolute -top-1 -right-1 bg-slate-900 border border-white/15 text-slate-400 hover:text-white p-1 rounded-full shadow-lg z-20 pointer-events-auto hover:bg-red-950 transition-colors"
-                  title={lang === 'zh' ? '收起吉祥物' : 'Collapse Mascot'}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
+                {!isEdgeHidden && (
+                  <button
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setIsEdgeHidden(false);
+                      setIsMinimized(true); 
+                    }}
+                    className="absolute -top-1 -right-1 bg-slate-900 border border-white/15 text-slate-400 hover:text-white p-1 rounded-full shadow-lg z-20 pointer-events-auto hover:bg-red-950 transition-colors"
+                    title={lang === 'zh' ? '收起吉祥物' : 'Collapse Mascot'}
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                )}
               </div>
             </motion.div>
           </div>
@@ -229,22 +277,28 @@ export default function MascotCompanion() {
 
       {/* Minimized Floating Anchor */}
       {isMinimized && (
-        <motion.button
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          onClick={() => setIsMinimized(false)}
-          className="pointer-events-auto p-2.5 bg-[#1b1c23] border border-indigo-500/40 text-indigo-400 hover:text-indigo-300 rounded-full shadow-[0_4px_20px_rgba(99,102,241,0.3)] hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center relative group"
-          title={lang === 'zh' ? '召唤吉祥物' : 'Summon Mascot'}
-        >
-          {/* Badge indicator */}
-          <span className="absolute -top-1.5 -right-1.5 bg-pink-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold animate-bounce shadow-sm">
-            {STICKER_META[activeExpression].icon}
-          </span>
-          {/* Rotating halo */}
-          <div className="absolute inset-0 rounded-full border border-dashed border-indigo-500/30 animate-spin group-hover:opacity-100 transition-opacity" style={{ animationDuration: '6s' }} />
-          <span className="text-base">👾</span>
-        </motion.button>
+        <div className="relative group pointer-events-auto">
+          <motion.button
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            onClick={() => {
+              if (isDragging) return;
+              setIsEdgeHidden(false);
+              setIsMinimized(false);
+            }}
+            className="p-2.5 bg-[#1b1c23] border border-indigo-500/40 text-indigo-400 hover:text-indigo-300 rounded-full shadow-[0_4px_20px_rgba(99,102,241,0.3)] hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center relative group"
+            title={lang === 'zh' ? '召唤吉祥物' : 'Summon Mascot'}
+          >
+            {/* Badge indicator */}
+            <span className="absolute -top-1.5 -right-1.5 bg-pink-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold animate-bounce shadow-sm">
+              {STICKER_META[isEdgeHidden ? 'sleep' : activeExpression].icon}
+            </span>
+            {/* Rotating halo */}
+            <div className="absolute inset-0 rounded-full border border-dashed border-indigo-500/30 animate-spin group-hover:opacity-100 transition-opacity" style={{ animationDuration: '6s' }} />
+            <span className="text-base">👾</span>
+          </motion.button>
+        </div>
       )}
-    </div>
+    </motion.div>
   );
 }

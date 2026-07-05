@@ -457,8 +457,7 @@ export default function MoyuChatroom() {
 
     const q = query(
       collection(db, 'chats'),
-      where('channelId', '==', activeChannelId),
-      limit(50)
+      where('channelId', '==', activeChannelId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -616,11 +615,11 @@ export default function MoyuChatroom() {
 
       // Dispatch real-time notification for private messages
       if (chatType === 'private' && selectedFriendUid) {
-        const snippet = textToSend.substring(0, 25);
+        const snippet = textToSend.length > 100 ? textToSend.substring(0, 100) + '...' : textToSend;
         const titleZh = "✉️ 收到同好私信电波！";
         const titleEn = "✉️ New Private Chat Alert!";
-        const contentZh = `💬 【${profile?.displayName || '神秘萌友'}】给你发来了悄悄话：“${snippet}...” (≧▽≦)/ 戳我去回复~`;
-        const contentEn = `💬 【${profile?.displayName || 'ACG Pal'}】sent you a message: "${snippet}..." (≧▽≦)/ Click to chat back!`;
+        const contentZh = `💬 【${profile?.displayName || '神秘萌友'}】: ${snippet}`;
+        const contentEn = `💬 【${profile?.displayName || 'ACG Pal'}】: ${snippet}`;
         
         await sendNotification(
           selectedFriendUid,

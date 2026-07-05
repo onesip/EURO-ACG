@@ -75,6 +75,15 @@ export default function CommunityPage() {
         const originalTitle = document.title;
         const preview = post.content.length > 20 ? `${post.content.substring(0, 20)}...` : post.content;
         document.title = lang === 'zh' ? `我嘞个惊为天人：${preview}` : `A must-see post: ${preview}`;
+        
+        // Scroll to the post
+        setTimeout(() => {
+          const element = document.getElementById(`post-${sharedId}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 300);
+
         return () => { document.title = originalTitle; };
       }
     }
@@ -490,7 +499,7 @@ export default function CommunityPage() {
           filteredPosts.map((post) => {
             const countryInfo = EUROPEAN_COUNTRIES.find(c => c.id === post.country);
             return (
-              <div key={post.id} className={cn(
+              <div id={`post-${post.id}`} key={post.id} className={cn(
                 "bg-[#141416] p-6 rounded-2xl border transition-all group relative",
                 post.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
               )}>

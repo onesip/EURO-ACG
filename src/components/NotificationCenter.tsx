@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { db } from '../lib/firebase';
@@ -288,6 +289,8 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
       showProfile(notif.senderId, { displayName: notif.senderName, photoURL: notif.senderPhoto });
     } else if (notif.link && notif.link.trim() !== '') {
       navigate(notif.link);
+    } else if (notif.type === 'message' && notif.senderId) {
+      navigate(`/community?friend=${notif.senderId}`);
     }
   };
 
@@ -304,21 +307,6 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
       await batch.commit();
     } catch (err) {
       console.error("Failed to mark all as read:", err);
-    }
-  };
-
-  // Clear all notifications
-  const handleClearAll = async () => {
-    if (!user) return;
-    try {
-      const batch = writeBatch(db);
-      notifications.forEach(n => {
-        batch.delete(doc(db, 'notifications', n.id));
-      });
-      await batch.commit();
-      setNotifications([]);
-    } catch (err) {
-      console.error("Failed to clear notifications:", err);
     }
   };
 
@@ -442,19 +430,20 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
       )}
 
       {/* 3. Dropdown Drawer/Slide-out Panel for Notifications */}
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            {/* Backdrop */}
-            <div 
-              className="fixed inset-0 bg-[#0A0A0B]/85 backdrop-blur-xs z-[999]" 
-              onClick={() => setIsOpen(false)}
-            />
-            
-            {/* Sidebar Drawer container */}
-            <motion.div
-              initial={{ opacity: 0, x: 100 }}
-              animate={{ opacity: 1, x: 0 }}
+      {createPortal(
+        <AnimatePresence>
+          {isOpen && (
+            <>
+              {/* Backdrop */}
+              <div 
+                className="fixed inset-0 bg-[#0A0A0B]/85 backdrop-blur-xs z-[999]" 
+                onClick={() => setIsOpen(false)}
+              />
+              
+              {/* Sidebar Drawer container */}
+              <motion.div
+                initial={{ opacity: 0, x: 100 }}
+                animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 100 }}
               transition={{ type: 'spring', damping: 22 }}
               className="fixed top-0 bottom-0 right-0 w-full max-w-sm bg-[#141416] border-l border-white/10 shadow-2xl z-[1000] flex flex-col"
@@ -514,19 +503,13 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
 
                 {notifications.length > 0 && (
                   <div className="flex items-center justify-between text-xs pt-1">
+                    <span className="text-slate-500">{lang === 'zh' ? '消息管理' : 'Message Management'}</span>
                     <button
                       onClick={handleMarkAllRead}
-                      className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
+                      className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors font-semibold"
                     >
-                      <CheckCheck className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>{lang === 'zh' ? '全员已读' : 'Read All'}</span>
-                    </button>
-                    <button
-                      onClick={handleClearAll}
-                      className="flex items-center gap-1 text-rose-400/80 hover:text-rose-400 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>{lang === 'zh' ? '一键退订所有历史' : 'Clear All'}</span>
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>{lang === 'zh' ? '一键已读所有信息' : 'Read All Messages'}</span>
                     </button>
                   </div>
                 )}
@@ -591,17 +574,27 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
                 )}
 
                 {notifications.length === 0 ? (
-                  <div className="py-20 text-center space-y-3">
-                    <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto text-slate-500">
+                  <div className="py-20 text-center space-y-4 flex flex-col items-center">
+                    <div className="w-12 h-12 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-400">
                       <Bell className="w-6 h-6" />
                     </div>
-                    <p className="text-xs text-slate-400 px-8">
+                    <p className="text-xs text-slate-400 px-8 leading-relaxed">
                       {lang === 'zh' 
                         ? friendRequests.length > 0 
-                          ? '上方有待处理的死党契约申请，快去通过吧！(*・ω・)ﾉ✧'
-                          : '目前还没有收到任何契约电波哦~ 快去发帖、吐槽、或者添加同好死党吧！(●ˇ∀ˇ●)' 
+                          ? '上方有待处理的死党契约申请，快去通过吧！(*・ω・)ﾉ✧\n新收到的私信也会在这里提示哦~'
+                          : '目前还没有收到任何新消息或契约电波哦~\n新收到的同好私信、帖子回复都会在这里提醒！(●ˇ∀ˇ●)' 
                         : 'Your signal wave is currently calm! Go write posts or add friends to receive chimes! (●ˇ∀ˇ●)'}
                     </p>
+                    <button
+                      onClick={() => {
+                        setIsOpen(false);
+                        if (onClosePanel) onClosePanel();
+                        navigate('/community');
+                      }}
+                      className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold text-slate-300 transition-colors mt-2"
+                    >
+                      {lang === 'zh' ? '前往同好大厅看看' : 'Go to Community'}
+                    </button>
                   </div>
                 ) : (
                   notifications.map((notif) => {
@@ -684,7 +677,9 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
             </motion.div>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body
+    )}
     </>
   );
 }

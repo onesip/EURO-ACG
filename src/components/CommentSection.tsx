@@ -106,7 +106,7 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
       if (parentAuthorId && parentAuthorId !== user.uid) {
         const titleZh = "💬 吐槽电波！收到同好回复！";
         const titleEn = "💬 New Retort! Someone replied!";
-        const snippet = commentText.substring(0, 25);
+        const snippet = commentText.length > 100 ? commentText.substring(0, 100) + '...' : commentText;
         const contentZh = `💬 【${profile?.displayName || '神秘萌友'}】在你的帖子下发表了新的吐槽：“${snippet}...” (*≧▽≦) 快去看看吧！`;
         const contentEn = `💬 【${profile?.displayName || 'ACG Pal'}】commented on your post: "${snippet}..." (*≧▽≦) Go check it out!`;
         
