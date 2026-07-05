@@ -193,13 +193,6 @@ export default function InAppNoticeOverlay() {
         setActiveMode('push_prompt');
         setOverlayOpen(true);
         playCuteChime(getSoundEnabled());
-            // Mobile push notification
-            if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
-              new Notification(lang === "zh" ? reminder.titleZh : reminder.titleEn, {
-                body: lang === "zh" ? reminder.contentZh : reminder.contentEn,
-                icon: "/logo.jpg"
-              });
-            }
       }, 15000);
 
       return () => clearTimeout(timer);

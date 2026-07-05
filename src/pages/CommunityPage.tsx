@@ -279,10 +279,10 @@ export default function CommunityPage() {
         {user && viewMode === 'posts' && (
           <button
             onClick={() => setIsComposeOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors font-medium shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-indigo-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 active:scale-95 text-white rounded-full transition-all text-xs font-bold shadow-[0_4px_12px_rgba(99,102,241,0.3)] shrink-0 border border-white/10"
           >
-            <Plus className="w-5 h-5" />
-            <span className="hidden sm:inline">{t('com.new')}</span>
+            <Plus className="w-4 h-4" />
+            <span>{t('com.new')}</span>
           </button>
         )}
       </div>
@@ -660,16 +660,7 @@ export default function CommunityPage() {
         />
       )}
 
-      {/* Mobile Floating Action Button */}
-      {viewMode === 'posts' && (
-        <button
-          onClick={() => setIsComposeOpen(true)}
-          className="md:hidden fixed bottom-24 right-5 z-40 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white p-4 rounded-full shadow-[0_8px_24px_rgba(99,102,241,0.5)] transition-all flex items-center justify-center border border-white/10"
-          title={t('com.new')}
-        >
-          <Plus className="w-6 h-6" />
-        </button>
-      )}
+
     </div>
   );
 }
