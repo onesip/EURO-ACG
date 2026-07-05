@@ -8,6 +8,7 @@ import { cn } from '../lib/utils';
 import { AppNotification } from '../lib/notifications';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { useUserProfileModal } from './UserProfileModal';
 
 // Play synthesized cute chime (double-note retro game style notice chime)
 export const playCuteChime = (soundEnabled: boolean) => {
@@ -56,6 +57,7 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
   const { user, profile } = useAuth();
   const { lang } = useLanguage();
   const navigate = useNavigate();
+  const { showProfile } = useUserProfileModal();
   
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -281,7 +283,10 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
       console.error("Failed to update notification status:", err);
     }
 
-    if (notif.link) {
+    // If it's a friend request or acceptance notification and senderId is present, view profile
+    if ((notif.type === 'friend_request' || notif.type === 'friend_accept') && notif.senderId) {
+      showProfile(notif.senderId, { displayName: notif.senderName, photoURL: notif.senderPhoto });
+    } else if (notif.link && notif.link.trim() !== '') {
       navigate(notif.link);
     }
   };
@@ -543,28 +548,38 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
                     <div className="space-y-1.5">
                       {friendRequests.map((req) => (
                         <div key={req.id} className="p-3 bg-[#1b1c23] rounded-xl border border-white/5 flex flex-col gap-2.5">
-                          <div className="flex items-center gap-2.5">
+                          <div 
+                            onClick={() => showProfile(req.fromId, { displayName: req.fromName, photoURL: req.fromPhoto })}
+                            className="flex items-center gap-2.5 cursor-pointer hover:bg-white/5 p-1 rounded-lg transition-all"
+                            title={lang === 'zh' ? '查看本命资料' : 'View user profile'}
+                          >
                             <img 
                               src={req.fromPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.fromId}`} 
                               alt="" 
-                              className="w-8 h-8 rounded-full border border-white/10 object-cover"
+                              className="w-8 h-8 rounded-full border border-white/10 object-cover shrink-0"
                             />
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold text-white truncate">{req.fromName}</p>
+                              <p className="text-xs font-bold text-white truncate hover:text-indigo-400 transition-colors">{req.fromName}</p>
                               <p className="text-[10px] text-slate-400 mt-0.5 truncate">{lang === 'zh' ? '想要与你缔结死党契约' : 'Wants to be your BFF'}</p>
                             </div>
                           </div>
                           
                           <div className="flex gap-2">
                             <button
+                              onClick={() => showProfile(req.fromId, { displayName: req.fromName, photoURL: req.fromPhoto })}
+                              className="px-2.5 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 hover:text-indigo-300 text-[10px] font-bold rounded-lg transition-colors border border-indigo-500/15"
+                            >
+                              {lang === 'zh' ? '查看本命' : 'View Profile'}
+                            </button>
+                            <button
                               onClick={() => handleAcceptFriendRequest(req)}
                               className="flex-1 py-1.5 bg-gradient-to-r from-indigo-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white text-[10px] font-bold rounded-lg transition-all active:scale-95 shadow-sm"
                             >
-                              {lang === 'zh' ? '契约达成 (接受)' : 'Accept'}
+                              {lang === 'zh' ? '契约达成' : 'Accept'}
                             </button>
                             <button
                               onClick={() => handleDeclineFriendRequest(req)}
-                              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-bold rounded-lg transition-colors"
+                              className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-bold rounded-lg transition-colors"
                             >
                               {lang === 'zh' ? '婉拒' : 'Decline'}
                             </button>
@@ -606,8 +621,17 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
                         )}
 
                         {/* Sender Avatar */}
-                        <div className="relative shrink-0">
-                          <div className="w-10 h-10 rounded-full overflow-hidden border border-white/5 bg-slate-800">
+                        <div 
+                          className="relative shrink-0 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (notif.senderId) {
+                              showProfile(notif.senderId, { displayName: notif.senderName, photoURL: notif.senderPhoto });
+                            }
+                          }}
+                          title={lang === 'zh' ? '查看用户资料' : 'View user profile'}
+                        >
+                          <div className="w-10 h-10 rounded-full overflow-hidden border border-white/5 bg-slate-800 hover:border-indigo-500/50 transition-all">
                             {notif.senderPhoto ? (
                               <img src={notif.senderPhoto} alt="" className="w-full h-full object-cover" />
                             ) : (
@@ -624,7 +648,16 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
                         {/* Text Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-baseline justify-between gap-1.5">
-                            <span className="text-xs font-bold text-white truncate max-w-[150px]">
+                            <span 
+                              className="text-xs font-bold text-white truncate max-w-[150px] cursor-pointer hover:text-indigo-400 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (notif.senderId) {
+                                  showProfile(notif.senderId, { displayName: notif.senderName, photoURL: notif.senderPhoto });
+                                }
+                              }}
+                              title={lang === 'zh' ? '查看用户资料' : 'View user profile'}
+                            >
                               {notif.senderName}
                             </span>
                             <span className="text-[9px] text-slate-500 shrink-0">

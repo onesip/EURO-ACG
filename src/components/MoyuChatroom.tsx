@@ -11,6 +11,9 @@ import { UserProfile } from '../types';
 import { useSearchParams } from 'react-router-dom';
 import { sendNotification } from '../lib/notifications';
 
+import MascotSticker from './MascotSticker';
+import { motion, AnimatePresence } from 'motion/react';
+
 interface ChatMessage {
   id: string;
   channelId: string;
@@ -21,7 +24,7 @@ interface ChatMessage {
   content: string;
   createdAt: any;
   timestamp: number; // local fallback timestamp
-  type?: 'text' | 'action'; // text message vs interactive action
+  type?: 'text' | 'action' | 'sticker'; // text message vs interactive action vs sticker
   actionType?: string; // nuzzle, pat, etc.
 }
 
@@ -66,6 +69,7 @@ export default function MoyuChatroom() {
   const [activeChannelId, setActiveChannelId] = useState<string>('global');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState<string>('');
+  const [showStickers, setShowStickers] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [chatType, setChatType] = useState<'public' | 'private'>('public');
   
@@ -501,6 +505,68 @@ export default function MoyuChatroom() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Send Sticker function
+  const handleSendSticker = async (stickerId: string) => {
+    if (!user) {
+      alert(isChinese ? '请先登录，加入星海大家庭！' : 'Please login to join the chat!');
+      return;
+    }
+    if (!activeChannelId) return;
+
+    const tempId = `temp_${Date.now()}`;
+    const optimMessage: ChatMessage = {
+      id: tempId,
+      channelId: activeChannelId,
+      senderId: user.uid,
+      senderName: profile?.displayName || user.displayName || '二次元居民',
+      senderPhoto: profile?.photoURL || user.photoURL || '',
+      senderRole: profile?.role || 'fan',
+      content: stickerId,
+      createdAt: null,
+      timestamp: Date.now(),
+      type: 'sticker'
+    };
+
+    setMessages(prev => [...prev, optimMessage]);
+
+    try {
+      await addDoc(collection(db, 'chats'), {
+        channelId: activeChannelId,
+        senderId: user.uid,
+        senderName: profile?.displayName || user.displayName || '二次元居民',
+        senderPhoto: profile?.photoURL || user.photoURL || '',
+        senderRole: profile?.role || 'fan',
+        content: stickerId,
+        createdAt: serverTimestamp(),
+        timestamp: Date.now(),
+        type: 'sticker'
+      });
+
+      if (chatType === 'private' && selectedFriendUid) {
+        const titleZh = "✨ 收到同好表情包！";
+        const titleEn = "✨ New Sticker Received!";
+        const contentZh = `💬 【${profile?.displayName || '神秘萌友'}】向你投递了一个可爱的吉祥物表情包！(〃>▽<〃)/* 快去瞧瞧~`;
+        const contentEn = `💬 【${profile?.displayName || 'ACG Pal'}】sent you a cute mascot sticker! (〃>▽<〃)/* Go check it out!`;
+
+        await sendNotification(
+          selectedFriendUid,
+          user.uid,
+          profile?.displayName || 'Moyu Pal',
+          profile?.photoURL || '',
+          'message',
+          lang === 'zh' ? titleZh : titleEn,
+          lang === 'zh' ? contentZh : contentEn,
+          `/community?friend=${user.uid}`
+        );
+      }
+    } catch (err: any) {
+      console.error("Failed to send sticker message:", err);
+      if (err?.code === 'resource-exhausted') {
+        setQuotaExceeded(true);
+      }
+    }
+  };
 
   // Send Message function
   const handleSendMessage = async (customContent?: string, isAction: boolean = false, actType?: string) => {
@@ -1053,14 +1119,25 @@ export default function MoyuChatroom() {
                       </span>
                     </div>
 
-                    <div className={cn(
-                      "px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-all shadow-sm",
-                      isMe 
-                        ? "bg-gradient-to-r from-pink-500/15 to-indigo-500/15 border border-pink-500/30 text-pink-100 rounded-tr-none" 
-                        : "bg-slate-800/80 border border-slate-700/50 text-slate-200 rounded-tl-none"
-                    )}>
-                      {msg.content}
-                    </div>
+                    {msg.type === 'sticker' ? (
+                      <div className={cn(
+                        "p-2.5 rounded-2xl border shadow-sm max-w-[120px] flex items-center justify-center relative overflow-hidden",
+                        isMe 
+                          ? "rounded-tr-none bg-pink-500/[0.02] border-pink-500/15" 
+                          : "rounded-tl-none bg-slate-800/40 border-slate-700/30"
+                      )}>
+                        <MascotSticker expression={msg.content as any} size="sm" showLabel={true} />
+                      </div>
+                    ) : (
+                      <div className={cn(
+                        "px-4 py-2.5 rounded-2xl text-xs leading-relaxed break-all shadow-sm",
+                        isMe 
+                          ? "bg-gradient-to-r from-pink-500/15 to-indigo-500/15 border border-pink-500/30 text-pink-100 rounded-tr-none" 
+                          : "bg-slate-800/80 border border-slate-700/50 text-slate-200 rounded-tl-none"
+                      )}>
+                        {msg.content}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -1114,7 +1191,48 @@ export default function MoyuChatroom() {
         )}
 
         {/* Input box bottom panel */}
-        <div className="p-4 border-t border-white/5 bg-[#121319] shrink-0 z-10">
+        <div className="p-4 border-t border-white/5 bg-[#121319] shrink-0 z-10 relative">
+          {/* Sticker Selection Popover */}
+          <AnimatePresence>
+            {showStickers && (
+              <motion.div
+                initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                className="absolute bottom-[80px] right-4 left-4 sm:left-auto sm:w-[320px] bg-[#141416]/95 border border-indigo-500/20 backdrop-blur-xl rounded-2xl p-3 shadow-xl z-50 flex flex-col gap-2.5 animate-fadeIn"
+              >
+                <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-indigo-400 uppercase tracking-wider">
+                    <Smile className="w-3.5 h-3.5 text-pink-400" />
+                    <span>{isChinese ? 'Miku 吉祥物专属表情包' : 'Miku Mascot Stickers'}</span>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setShowStickers(false)}
+                    className="p-1 rounded-full hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-all"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2 py-1 max-h-[220px] overflow-y-auto scrollbar-none">
+                  {(['happy', 'shy', 'angry', 'cry', 'shocked', 'sleep'] as const).map((expr) => (
+                    <button
+                      key={expr}
+                      type="button"
+                      onClick={() => {
+                        handleSendSticker(expr);
+                        setShowStickers(false);
+                      }}
+                      className="p-1.5 rounded-xl bg-white/[0.02] hover:bg-indigo-500/10 border border-white/5 hover:border-indigo-500/20 flex flex-col items-center justify-center transition-all hover:scale-105"
+                    >
+                      <MascotSticker expression={expr} size="sm" showLabel={true} />
+                    </button>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {user ? (
             activeChannelId ? (
               <form
@@ -1122,8 +1240,23 @@ export default function MoyuChatroom() {
                   e.preventDefault();
                   handleSendMessage();
                 }}
-                className="flex items-center gap-2.5"
+                className="flex items-center gap-2"
               >
+                {/* Sticker trigger button */}
+                <button
+                  type="button"
+                  onClick={() => setShowStickers(!showStickers)}
+                  className={cn(
+                    "p-3 rounded-2xl border transition-all shrink-0 active:scale-95",
+                    showStickers 
+                      ? "bg-pink-500/25 border-pink-500/40 text-pink-300" 
+                      : "bg-white/[0.03] hover:bg-white/[0.06] border-white/5 hover:border-white/10 text-slate-400 hover:text-slate-200"
+                  )}
+                  title={isChinese ? "发送吉祥物表情" : "Mascot Stickers"}
+                >
+                  <Smile className="w-4 h-4" />
+                </button>
+
                 <input
                   type="text"
                   value={inputText}

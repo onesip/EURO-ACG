@@ -13,6 +13,7 @@ import QuotaBanner from './QuotaBanner';
 import NotificationCenter from './NotificationCenter';
 import InAppNoticeOverlay from './InAppNoticeOverlay';
 import { NewbieTour } from './NewbieTour';
+import MascotCompanion from './MascotCompanion';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const { user, profile, isQuotaExceeded, isLoginModalOpen, setOpenLoginModal: setIsLoginModalOpen } = useAuth();
@@ -764,6 +765,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
       <NewbieTour />
+      <MascotCompanion />
     </div>
   );
 }
