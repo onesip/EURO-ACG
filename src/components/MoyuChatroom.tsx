@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc, onSnapshot, documentId } from 'firebase/firestore';
+import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc, onSnapshot, documentId, writeBatch } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { loadFromCache, saveToCache } from '../lib/cache';
-import { MessageSquare, Send, Sparkles, Users, Coffee, RefreshCw, Heart, Lock, Globe, Smile, Music } from 'lucide-react';
+import { MessageSquare, Send, Sparkles, Users, Coffee, RefreshCw, Heart, Lock, Globe, Smile, Music, ChevronLeft, Search, X } from 'lucide-react';
 import UserAvatar from './UserAvatar';
 import { cn } from '../lib/utils';
 import { UserProfile } from '../types';
@@ -69,9 +69,20 @@ export default function MoyuChatroom() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [chatType, setChatType] = useState<'public' | 'private'>('public');
   
-  // Friends State
+  // Mobile Navigation Split View ('list' vs 'chat')
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+
+  // Friends & Relationship State
   const [friendsList, setFriendsList] = useState<{ uid: string; displayName: string; photoURL: string; role: string }[]>([]);
+  const [friendRequestsSent, setFriendRequestsSent] = useState<any[]>([]);
+  const [friendRequestsReceived, setFriendRequestsReceived] = useState<any[]>([]);
   const [selectedFriendUid, setSelectedFriendUid] = useState<string | null>(null);
+  
+  // Search & Discover States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
   const [quoteIndex, setQuoteIndex] = useState(0);
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -84,6 +95,7 @@ export default function MoyuChatroom() {
       const minId = user.uid < friendUid ? user.uid : friendUid;
       const maxId = user.uid > friendUid ? user.uid : friendUid;
       setActiveChannelId(`pv_${minId}_${maxId}`);
+      setMobileView('chat');
 
       // Clean up search param from the URL
       const newParams = new URLSearchParams(searchParams);
@@ -177,6 +189,7 @@ export default function MoyuChatroom() {
   const handleSelectFriend = (friendUid: string) => {
     setSelectedFriendUid(friendUid);
     setChatType('private');
+    setMobileView('chat');
     // For private channels, make channelId a deterministic ID based on uids
     if (user) {
       const minId = user.uid < friendUid ? user.uid : friendUid;
@@ -196,6 +209,234 @@ export default function MoyuChatroom() {
     setActiveChannelId(channelId);
     setSelectedFriendUid(null);
     setChatType('public');
+    setMobileView('chat');
+  };
+
+  // Listen to pending friend requests (sent and received) in real-time
+  useEffect(() => {
+    if (!user) {
+      setFriendRequestsSent([]);
+      setFriendRequestsReceived([]);
+      return;
+    }
+
+    // 1. Sent requests
+    const qSent = query(
+      collection(db, 'friendRequests'),
+      where('fromId', '==', user.uid),
+      where('status', '==', 'pending')
+    );
+    const unsubSent = onSnapshot(qSent, async (snap) => {
+      try {
+        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const toIds = list.map((item: any) => item.toId);
+        if (toIds.length === 0) {
+          setFriendRequestsSent([]);
+          return;
+        }
+        
+        const fetchedProfiles: Record<string, any> = {};
+        const chunks = [];
+        for (let i = 0; i < toIds.length; i += 30) {
+          chunks.push(toIds.slice(i, i + 30));
+        }
+        for (const chunk of chunks) {
+          const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
+          const userSnap = await getDocs(q);
+          userSnap.forEach(docSnap => {
+            fetchedProfiles[docSnap.id] = docSnap.data();
+          });
+        }
+        
+        const resolved = list.map((item: any) => ({
+          requestId: item.id,
+          uid: item.toId,
+          displayName: fetchedProfiles[item.toId]?.displayName || item.toName || (isChinese ? '次元萌友' : 'Moyu Friend'),
+          photoURL: fetchedProfiles[item.toId]?.photoURL || item.toPhoto || '',
+          role: fetchedProfiles[item.toId]?.role || 'other'
+        }));
+        setFriendRequestsSent(resolved);
+      } catch (err) {
+        console.error("Error in real-time sent friend requests:", err);
+      }
+    });
+
+    // 2. Received requests
+    const qReceived = query(
+      collection(db, 'friendRequests'),
+      where('toId', '==', user.uid),
+      where('status', '==', 'pending')
+    );
+    const unsubReceived = onSnapshot(qReceived, async (snap) => {
+      try {
+        const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        const fromIds = list.map((item: any) => item.fromId);
+        if (fromIds.length === 0) {
+          setFriendRequestsReceived([]);
+          return;
+        }
+        
+        const fetchedProfiles: Record<string, any> = {};
+        const chunks = [];
+        for (let i = 0; i < fromIds.length; i += 30) {
+          chunks.push(fromIds.slice(i, i + 30));
+        }
+        for (const chunk of chunks) {
+          const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
+          const userSnap = await getDocs(q);
+          userSnap.forEach(docSnap => {
+            fetchedProfiles[docSnap.id] = docSnap.data();
+          });
+        }
+        
+        const resolved = list.map((item: any) => ({
+          requestId: item.id,
+          uid: item.fromId,
+          displayName: fetchedProfiles[item.fromId]?.displayName || item.fromName || (isChinese ? '次元萌友' : 'Moyu Friend'),
+          photoURL: fetchedProfiles[item.fromId]?.photoURL || item.fromPhoto || '',
+          role: fetchedProfiles[item.fromId]?.role || 'other'
+        }));
+        setFriendRequestsReceived(resolved);
+      } catch (err) {
+        console.error("Error in real-time received friend requests:", err);
+      }
+    });
+
+    return () => {
+      unsubSent();
+      unsubReceived();
+    };
+  }, [user, isChinese]);
+
+  // Search/discover users
+  const handleSearchUsers = async () => {
+    if (!searchQuery.trim() || !user) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const snap = await getDocs(collection(db, 'users'));
+      const list: any[] = [];
+      const queryLower = searchQuery.toLowerCase();
+      
+      snap.forEach(docSnap => {
+        const uData = docSnap.data();
+        const dName = uData.displayName || '';
+        if (docSnap.id !== user.uid && dName.toLowerCase().includes(queryLower)) {
+          list.push({
+            uid: docSnap.id,
+            displayName: dName || (isChinese ? '次元居民' : 'Moyu Resident'),
+            photoURL: uData.photoURL || '',
+            role: uData.role || 'other'
+          });
+        }
+      });
+      setSearchResults(list.slice(0, 10)); // Limit to 10 results for token savings
+    } catch (err) {
+      console.error("Error searching users:", err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Trigger search on typing change too for smooth interaction
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery.trim()) {
+        handleSearchUsers();
+      } else {
+        setSearchResults([]);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Send friend request
+  const handleSendFriendRequest = async (targetUid: string, targetDisplayName: string, targetPhoto: string) => {
+    if (!user || !profile) return;
+    try {
+      await addDoc(collection(db, 'friendRequests'), {
+        fromId: user.uid,
+        fromName: profile.displayName || user.displayName || 'Moyu Resident',
+        fromPhoto: profile.photoURL || user.photoURL || '',
+        toId: targetUid,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+
+      // Dispatch friend request notification
+      const titleZh = "🤝 收到一份死党契约申请！";
+      const titleEn = "🤝 New Friend Request!";
+      const contentZh = `🌟 【${profile.displayName || '二次元同好'}】向你递交了一份死党契约，想要与你缔结羁绊哦！快去查看吧！(✿◡◡✿)`;
+      const contentEn = `🌟 【${profile.displayName || 'ACG Pal'}】wants to forge a soul contract (friend request) with you! Go accept it! (✿◡◡✿)`;
+      
+      await addDoc(collection(db, 'notifications'), {
+        userId: targetUid,
+        senderId: user.uid,
+        senderName: profile.displayName || user.displayName || 'Pal',
+        senderPhoto: profile.photoURL || user.photoURL || '',
+        type: 'friend_request',
+        title: isChinese ? titleZh : titleEn,
+        content: isChinese ? contentZh : contentEn,
+        link: '/profile',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Error sending friend request:", err);
+    }
+  };
+
+  // Accept friend request
+  const handleAcceptFriendRequest = async (requestId: string, fromId: string, fromDisplayName: string) => {
+    if (!user || !profile) return;
+    try {
+      const batch = writeBatch(db);
+      
+      // Update request status to accepted
+      batch.update(doc(db, 'friendRequests', requestId), { status: 'accepted' });
+      
+      // Add to friends subcollection for both users
+      batch.set(doc(db, 'users', user.uid, 'friends', fromId), { 
+        uid: fromId, 
+        createdAt: serverTimestamp() 
+      });
+      batch.set(doc(db, 'users', fromId, 'friends', user.uid), { 
+        uid: user.uid, 
+        createdAt: serverTimestamp() 
+      });
+      
+      await batch.commit();
+      
+      // Clear cache to force instant refresh in components
+      localStorage.removeItem(`user_friends_list_${user.uid}`);
+      localStorage.removeItem(`user_friends_list_${fromId}`);
+      
+      // Send a cute success notification
+      const titleZh = "💖 羁绊缔结成功！(≧▽≦)/*";
+      const titleEn = "💖 Soul Contract Signed!";
+      const contentZh = `✨ 【${profile?.displayName || '同好'}】同意了你的死党契约！你们现在是真正的同好伙伴啦，快去私聊互动吧！`;
+      const contentEn = `✨ 【${profile?.displayName || 'Pal'}】accepted your soul contract! You are now official friends! Go text each other!`;
+      
+      await addDoc(collection(db, 'notifications'), {
+        userId: fromId,
+        senderId: user.uid,
+        senderName: profile?.displayName || user.displayName || 'Pal',
+        senderPhoto: profile?.photoURL || user.photoURL || '',
+        type: 'friend_accept',
+        title: isChinese ? titleZh : titleEn,
+        content: isChinese ? contentZh : contentEn,
+        link: '/profile',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+      
+      // Select the new friend
+      handleSelectFriend(fromId);
+    } catch (err) {
+      console.error("Failed to accept friend request in MoyuChatroom:", err);
+    }
   };
 
   // Listen for Chat Messages of CURRENT activeChannelId
@@ -402,7 +643,10 @@ export default function MoyuChatroom() {
   return (
     <div id="moyu-chatroom-root" className="bg-[#101116] border border-white/5 rounded-3xl overflow-hidden shadow-2xl h-[680px] flex flex-col md:flex-row animate-fadeIn">
       {/* Sidebar: Channels and Friends */}
-      <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-white/5 flex flex-col h-1/3 md:h-full shrink-0 bg-[#0d0e12]">
+      <div className={cn(
+        "w-full md:w-80 border-b md:border-b-0 md:border-r border-white/5 flex flex-col md:h-full shrink-0 bg-[#0d0e12]",
+        mobileView === 'list' ? 'h-full flex' : 'hidden md:flex'
+      )}>
         
         {/* Quote Marquee - Extremely Anime style */}
         <div className="p-3 bg-pink-500/5 border-b border-pink-500/10 flex items-center gap-2 text-pink-400/90 text-xs font-mono">
@@ -446,66 +690,233 @@ export default function MoyuChatroom() {
           </button>
         </div>
 
+        {/* Search & Connect Panel (Only shown in Private Chat tab) */}
+        {chatType === 'private' && (
+          <div className="px-2.5 pb-2 pt-1.5 border-b border-white/5 bg-[#0e0f14]/50">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearchUsers();
+                  }
+                }}
+                placeholder={isChinese ? "🔍 搜昵称找同好/泡泡... (回车)" : "🔍 Search user name... (Enter)"}
+                className="w-full bg-[#181922] border border-white/5 rounded-xl px-3.5 py-1.5 pl-8 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-pink-500/50 transition-all font-sans"
+              />
+              <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-slate-500 pointer-events-none" />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }}
+                  className="absolute right-2.5 top-2 text-slate-500 hover:text-slate-300"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {isSearching && (
+              <div className="text-[10px] text-slate-400 mt-1 text-center font-mono">
+                {isChinese ? '正在搜索同好波段...' : 'Searching soulwaves...'}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* List items (Scrollable) */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin scrollbar-thumb-white/5">
+        <div className="flex-1 overflow-y-auto p-2 space-y-3.5 scrollbar-thin scrollbar-thumb-white/5">
           {chatType === 'public' ? (
-            CHANNELS.map((ch) => (
-              <button
-                key={ch.id}
-                onClick={() => handleSelectChannel(ch.id)}
-                className={cn(
-                  "w-full text-left px-3 py-2.5 rounded-2xl flex items-center gap-3 transition-all",
-                  activeChannelId === ch.id && chatType === 'public'
-                    ? "bg-[#181922] border border-pink-500/30 shadow-lg text-pink-400"
-                    : "hover:bg-white/[0.03] text-slate-400 hover:text-slate-200 border border-transparent"
-                )}
-              >
-                <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-lg shrink-0">
-                  {ch.flag}
-                </div>
-                <div className="truncate flex-1">
-                  <div className="text-xs font-bold tracking-tight">
-                    {isChinese ? ch.name : ch.enName}
+            <div className="space-y-1.5">
+              {CHANNELS.map((ch) => (
+                <button
+                  key={ch.id}
+                  onClick={() => handleSelectChannel(ch.id)}
+                  className={cn(
+                    "w-full text-left px-3 py-2.5 rounded-2xl flex items-center gap-3 transition-all",
+                    activeChannelId === ch.id && chatType === 'public'
+                      ? "bg-[#181922] border border-pink-500/30 shadow-lg text-pink-400"
+                      : "hover:bg-white/[0.03] text-slate-400 hover:text-slate-200 border border-transparent"
+                  )}
+                >
+                  <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center text-lg shrink-0">
+                    {ch.flag}
                   </div>
-                  <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                    {isChinese ? ch.desc : ch.enDesc}
+                  <div className="truncate flex-1">
+                    <div className="text-xs font-bold tracking-tight">
+                      {isChinese ? ch.name : ch.enName}
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                      {isChinese ? ch.desc : ch.enDesc}
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))
-          ) : friendsList.length > 0 ? (
-            friendsList.map((fr) => (
-              <button
-                key={fr.uid}
-                onClick={() => handleSelectFriend(fr.uid)}
-                className={cn(
-                  "w-full text-left px-3 py-2.5 rounded-2xl flex items-center gap-3 transition-all",
-                  selectedFriendUid === fr.uid && chatType === 'private'
-                    ? "bg-[#181922] border border-pink-500/30 shadow-lg text-pink-400"
-                    : "hover:bg-white/[0.03] text-slate-400 hover:text-slate-200 border border-transparent"
-                )}
-              >
-                <div className="shrink-0 relative">
-                  <UserAvatar uid={fr.uid} photoURL={fr.photoURL} className="w-8 h-8 border border-white/10" />
-                  <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-[#0d0e12] rounded-full" />
-                </div>
-                <div className="truncate flex-1">
-                  <div className="text-xs font-bold flex items-center gap-1.5">
-                    <span className="truncate">{fr.displayName}</span>
-                    <span className={cn("text-[9px] px-1 py-0.5 rounded", getRoleBadge(fr.role).style)}>
-                      {getRoleBadge(fr.role).name}
-                    </span>
-                  </div>
-                  <div className="text-[10px] text-slate-500 truncate mt-0.5">
-                    {isChinese ? '✨ 开启私密双人世界贴贴~' : 'Start private 1-on-1 chat'}
-                  </div>
-                </div>
-              </button>
-            ))
+                </button>
+              ))}
+            </div>
           ) : (
-            <div className="py-16 text-center text-slate-500 text-xs px-4 flex flex-col items-center">
-              <Users className="w-8 h-8 text-slate-600 mb-2 opacity-30" />
-              <p>{isChinese ? '还没有添加好友哦，快去个人卡片加一些死党吧！' : 'No friends added yet. Connect with users to add friends!'}</p>
+            <div className="space-y-4">
+              {/* 1. Search Results */}
+              {searchResults.length > 0 && (
+                <div className="border border-pink-500/10 pb-2 bg-pink-500/[0.02] p-2 rounded-2xl">
+                  <div className="text-[10px] text-pink-400 font-bold px-1.5 mb-2.5 flex items-center justify-between">
+                    <span>{isChinese ? '🔍 发现的萌友' : '🔍 Found Members'}</span>
+                    <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="text-[9px] hover:text-slate-300">
+                      {isChinese ? '清除' : 'Clear'}
+                    </button>
+                  </div>
+                  <div className="space-y-1.5">
+                    {searchResults.map((fr) => {
+                      const isFriend = friendsList.some(f => f.uid === fr.uid);
+                      const isSent = friendRequestsSent.some(r => r.uid === fr.uid);
+                      const isReceived = friendRequestsReceived.some(r => r.uid === fr.uid);
+                      const receivedItem = friendRequestsReceived.find(r => r.uid === fr.uid);
+
+                      return (
+                        <div key={fr.uid} className="flex items-center justify-between px-2 py-1.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-all">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <UserAvatar uid={fr.uid} photoURL={fr.photoURL} className="w-7 h-7 border border-white/5" />
+                            <div className="truncate text-left">
+                              <div className="text-xs font-bold text-slate-200 truncate">{fr.displayName}</div>
+                              <div className="text-[9px] text-slate-500 truncate">{getRoleBadge(fr.role).name}</div>
+                            </div>
+                          </div>
+                          <div className="shrink-0 pl-1.5">
+                            {isFriend ? (
+                              <button
+                                onClick={() => handleSelectFriend(fr.uid)}
+                                className="text-[10px] bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25 border border-indigo-500/20 px-2 py-1 rounded-lg transition-all font-bold"
+                              >
+                                {isChinese ? '发私聊' : 'Chat'}
+                              </button>
+                            ) : isSent ? (
+                              <span className="text-[9px] text-amber-500 bg-amber-500/10 border border-amber-500/25 px-2 py-1 rounded-lg font-bold">
+                                {isChinese ? '已发契约' : 'Sent'}
+                              </span>
+                            ) : isReceived ? (
+                              <button
+                                onClick={() => handleAcceptFriendRequest(receivedItem.requestId, fr.uid, fr.displayName)}
+                                className="text-[9px] bg-green-500 text-white hover:bg-green-600 px-2 py-1 rounded-lg transition-all font-bold animate-pulse"
+                              >
+                                {isChinese ? '接受' : 'Accept'}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleSendFriendRequest(fr.uid, fr.displayName, fr.photoURL)}
+                                className="text-[9px] bg-pink-500 text-white hover:bg-pink-600 px-2 py-1 rounded-lg transition-all font-bold"
+                              >
+                                {isChinese ? '缔结契约' : 'Add'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 2. Received requests */}
+              {friendRequestsReceived.length > 0 && (
+                <div className="border border-green-500/10 pb-2 bg-green-500/[0.02] p-2 rounded-2xl">
+                  <div className="text-[10px] text-green-400 font-bold px-1.5 mb-2.5">
+                    {isChinese ? '📥 收到契约邀请' : '📥 Incoming Contracts'}
+                  </div>
+                  <div className="space-y-1.5">
+                    {friendRequestsReceived.map((fr) => (
+                      <div key={fr.uid} className="flex items-center justify-between px-2 py-1.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-all">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <UserAvatar uid={fr.uid} photoURL={fr.photoURL} className="w-7 h-7 border border-green-500/10" />
+                          <div className="truncate text-left">
+                            <div className="text-xs font-bold text-slate-200 truncate">{fr.displayName}</div>
+                            <div className="text-[9px] text-slate-500 truncate">{getRoleBadge(fr.role).name}</div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleAcceptFriendRequest(fr.requestId, fr.uid, fr.displayName)}
+                          className="text-[10px] bg-green-500 text-white hover:bg-green-600 px-2.5 py-1 rounded-lg font-bold transition-all shrink-0"
+                        >
+                          {isChinese ? '同意' : 'Accept'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Sent requests */}
+              {friendRequestsSent.length > 0 && (
+                <div className="border border-amber-500/10 pb-2 bg-amber-500/[0.01] p-2 rounded-2xl">
+                  <div className="text-[10px] text-amber-500 font-bold px-1.5 mb-2.5">
+                    {isChinese ? '📤 正在建立链接...' : '📤 Outgoing Signals'}
+                  </div>
+                  <div className="space-y-1.5">
+                    {friendRequestsSent.map((fr) => (
+                      <div key={fr.uid} className="flex items-center justify-between px-2 py-1.5 rounded-xl bg-white/[0.01] transition-all">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <UserAvatar uid={fr.uid} photoURL={fr.photoURL} className="w-7 h-7 border border-amber-500/10" />
+                          <div className="truncate text-left">
+                            <div className="text-xs font-bold text-slate-200 truncate">{fr.displayName}</div>
+                            <div className="text-[9px] text-slate-500 truncate">{getRoleBadge(fr.role).name}</div>
+                          </div>
+                        </div>
+                        <span className="text-[9px] text-amber-500 font-bold shrink-0 px-2 py-1 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                          {isChinese ? '等待回应' : 'Pending'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. Friends List */}
+              {friendsList.length > 0 ? (
+                <div>
+                  <div className="text-[10px] text-indigo-400 font-bold px-1.5 mb-2 flex items-center justify-between">
+                    <span>{isChinese ? '🤝 已链接的死党' : '🤝 Connected Friends'}</span>
+                    <span className="text-[9px] text-slate-500 font-normal">({friendsList.length})</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {friendsList.map((fr) => (
+                      <button
+                        key={fr.uid}
+                        onClick={() => handleSelectFriend(fr.uid)}
+                        className={cn(
+                          "w-full text-left px-3 py-2.5 rounded-2xl flex items-center gap-3 transition-all",
+                          selectedFriendUid === fr.uid && chatType === 'private'
+                            ? "bg-[#181922] border border-pink-500/30 shadow-lg text-pink-400"
+                            : "hover:bg-white/[0.03] text-slate-400 hover:text-slate-200 border border-transparent"
+                        )}
+                      >
+                        <div className="shrink-0 relative">
+                          <UserAvatar uid={fr.uid} photoURL={fr.photoURL} className="w-8 h-8 border border-white/10" />
+                          <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-[#0d0e12] rounded-full" />
+                        </div>
+                        <div className="truncate flex-1">
+                          <div className="text-xs font-bold flex items-center gap-1.5">
+                            <span className="truncate">{fr.displayName}</span>
+                            <span className={cn("text-[9px] px-1 py-0.5 rounded", getRoleBadge(fr.role).style)}>
+                              {getRoleBadge(fr.role).name}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-slate-500 truncate mt-0.5">
+                            {isChinese ? '✨ 开启私密双人世界贴贴~' : 'Start private 1-on-1 chat'}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                friendRequestsReceived.length === 0 && friendRequestsSent.length === 0 && (
+                  <div className="py-16 text-center text-slate-500 text-xs px-4 flex flex-col items-center">
+                    <Users className="w-8 h-8 text-slate-600 mb-2 opacity-30" />
+                    <p>{isChinese ? '还没有任何链接哦，在上方搜索“泡泡”试试！' : 'No connections yet! Try searching above!'}</p>
+                  </div>
+                )
+              )}
             </div>
           )}
         </div>
@@ -527,11 +938,23 @@ export default function MoyuChatroom() {
       </div>
 
       {/* Main Chatroom Section */}
-      <div className="flex-1 flex flex-col h-2/3 md:h-full bg-[#111218] relative">
+      <div className={cn(
+        "flex-1 flex flex-col md:h-full bg-[#111218] relative",
+        mobileView === 'chat' ? 'h-full flex' : 'hidden md:flex'
+      )}>
         
         {/* Chat header */}
         <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between bg-[#121319]/50 backdrop-blur z-10 shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            {/* Back Arrow for Mobile View */}
+            <button
+              onClick={() => setMobileView('list')}
+              className="md:hidden flex items-center justify-center p-2 text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl mr-1 shrink-0"
+              title={isChinese ? "返回列表" : "Back to list"}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
             {chatType === 'public' ? (
               <>
                 <div className="w-10 h-10 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center text-xl shrink-0 border border-pink-500/20">
