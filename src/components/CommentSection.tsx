@@ -5,6 +5,8 @@ import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { useUserProfileModal } from './UserProfileModal';
+import UserAvatar from './UserAvatar';
+import UserDisplayName from './UserDisplayName';
 import { isQuotaExceeded } from '../lib/quota';
 import { COMMENT_PAGE_LIMIT } from '../config/limits';
 import { Send, MessageCircle } from 'lucide-react';
@@ -170,13 +172,13 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
                     zIndex: 10
                   }}
                 >
-                  <div 
+                  <UserAvatar 
+                    uid={comment.authorId} 
+                    photoURL={comment.authorPhoto} 
+                    displayName={comment.authorName} 
+                    size="xs" 
                     onClick={() => showProfile(comment.authorId, { displayName: comment.authorName, photoURL: comment.authorPhoto })}
-                    className="w-5 h-5 rounded-full overflow-hidden flex-shrink-0 cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-                    title={comment.authorName}
-                  >
-                    {comment.authorPhoto ? <img src={comment.authorPhoto} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-700 text-[10px] flex items-center justify-center text-white">{comment.authorName?.charAt(0) || 'U'}</div>}
-                  </div>
+                  />
                   <span className="text-sm font-medium text-white shadow-sm">{comment.content}</span>
                 </div>
               ))}
@@ -185,19 +187,20 @@ export default function CommentSection({ parentCollection, parentId }: { parentC
             <div className="space-y-3">
               {comments.map(comment => (
                 <div key={comment.id} className="flex gap-3">
-                  <div 
+                  <UserAvatar 
+                    uid={comment.authorId} 
+                    photoURL={comment.authorPhoto} 
+                    displayName={comment.authorName} 
+                    size="sm" 
                     onClick={() => showProfile(comment.authorId, { displayName: comment.authorName, photoURL: comment.authorPhoto })}
-                    className="w-8 h-8 rounded-full bg-slate-800 flex-shrink-0 flex items-center justify-center text-xs font-bold text-slate-400 overflow-hidden cursor-pointer hover:scale-105 active:scale-95 transition-transform shadow-[0_0_8px_rgba(99,102,241,0.1)] border border-transparent hover:border-indigo-500/50"
-                  >
-                      {comment.authorPhoto ? <img src={comment.authorPhoto} className="w-full h-full object-cover" /> : comment.authorName?.charAt(0) || 'U'}
-                  </div>
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="bg-white/5 rounded-2xl rounded-tl-none px-4 py-2 inline-block max-w-full">
                       <p 
                         onClick={() => showProfile(comment.authorId, { displayName: comment.authorName, photoURL: comment.authorPhoto })}
                         className="text-xs font-medium text-slate-300 hover:text-indigo-400 cursor-pointer transition-colors mb-0.5 truncate"
                       >
-                        {comment.authorName}
+                        <UserDisplayName uid={comment.authorId} fallbackName={comment.authorName} />
                       </p>
                       <p className="text-sm text-slate-200 break-words whitespace-pre-wrap">{comment.content}</p>
                     </div>

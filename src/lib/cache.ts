@@ -49,7 +49,31 @@ export function saveToCache(key: string, data: any, ttlMs: number = 300000): voi
     };
     localStorage.setItem(key, JSON.stringify(payload));
   } catch (e) {
-    console.error(`Failed to save cache for key ${key}:`, e);
+    // If quota exceeded, clean up cached user profiles and other transient cached data to make room
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('cached_') || k.startsWith('gender_') || k.startsWith('user_friends_list_'))) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => {
+        try {
+          localStorage.removeItem(k);
+        } catch (_) {}
+      });
+      
+      // Try saving once more
+      const payload = {
+        data,
+        expiresAt: Date.now() + ttlMs,
+      };
+      localStorage.setItem(key, JSON.stringify(payload));
+    } catch (retryError) {
+      // Safe fallback if localStorage is still fully saturated or blocked
+      console.warn(`Cache write skipped for key ${key} due to persistent storage limits.`);
+    }
   }
 }
 

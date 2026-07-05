@@ -10,6 +10,7 @@ import ImageUpload from '../components/ImageUpload';
 import ShareButton from '../components/ShareButton';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
+import UserDisplayName from '../components/UserDisplayName';
 import { Activity } from '../types';
 import { Calendar as CalendarIcon, MapPin, Users, Plus, X, Globe, Sparkles, Edit, Trash2, Pin, AlertCircle } from 'lucide-react';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
@@ -437,6 +438,53 @@ export default function ActivitiesPage() {
                   </a>
                 </div>
               )}
+
+              {/* 主理人 Host Block */}
+              <div className="flex items-center justify-between p-3.5 bg-indigo-500/[0.03] border border-indigo-500/10 rounded-2xl mb-5 group/host">
+                <div className="flex items-center gap-3">
+                  <UserAvatar 
+                    uid={activity.creatorId} 
+                    photoURL={activity.creatorPhoto} 
+                    displayName={activity.creatorName} 
+                    size="sm" 
+                    showGender={true}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      showProfile(activity.creatorId, { displayName: activity.creatorName || '次元主理人', photoURL: activity.creatorPhoto });
+                    }}
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400 bg-indigo-500/15 px-1.5 py-0.5 rounded-md">
+                        {lang === 'zh' ? '主理人' : 'Host'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-bold">
+                        {lang === 'zh' ? '发起行动' : 'Initiator'}
+                      </span>
+                    </div>
+                    <p 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        showProfile(activity.creatorId, { displayName: activity.creatorName || '次元主理人', photoURL: activity.creatorPhoto });
+                      }}
+                      className="text-xs font-semibold text-white hover:text-indigo-400 cursor-pointer transition-colors mt-0.5"
+                    >
+                      <UserDisplayName uid={activity.creatorId} fallbackName={activity.creatorName || '次元主理人'} />
+                    </p>
+                  </div>
+                </div>
+                
+                <button 
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    showProfile(activity.creatorId, { displayName: activity.creatorName || '次元主理人', photoURL: activity.creatorPhoto });
+                  }}
+                  className="text-[11px] font-bold text-slate-400 hover:text-indigo-400 bg-white/5 hover:bg-indigo-500/10 px-3 py-1.5 rounded-xl transition-all border border-white/5 hover:border-indigo-500/20 shadow-sm"
+                >
+                  {lang === 'zh' ? '查看本命' : 'View Profile'}
+                </button>
+              </div>
               
               <div className="flex flex-wrap gap-4 text-sm text-slate-400 mb-6">
                 <div className="flex items-center gap-1.5">

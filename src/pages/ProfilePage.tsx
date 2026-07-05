@@ -11,6 +11,7 @@ import { useTheme, ACG_THEMES } from '../components/ThemeProvider';
 import { cn } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { sendNotification } from '../lib/notifications';
+import { clearProfileCache } from '../lib/useUserProfile';
 
 const EUROPEAN_COUNTRIES = [
   { id: 'NL', name: '荷兰 (Netherlands)' },
@@ -437,6 +438,7 @@ export default function ProfilePage() {
     try {
       const docRef = doc(db, 'users', user.uid);
       await setDoc(docRef, { ...formData, updatedAt: Date.now() }, { merge: true });
+      clearProfileCache(user.uid);
       await refreshProfile();
       alert('本命档案更新成功！Profile updated successfully!');
     } catch (error: any) {
@@ -677,6 +679,7 @@ export default function ProfilePage() {
                       try {
                         const docRef = doc(db, 'users', user.uid);
                         await setDoc(docRef, { photoURL: url, updatedAt: Date.now() }, { merge: true });
+                        clearProfileCache(user.uid);
                         await refreshProfile();
                         alert(lang === 'zh' ? '头像更新成功！' : 'Avatar updated!');
                       } catch (e) {

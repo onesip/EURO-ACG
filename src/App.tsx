@@ -11,6 +11,7 @@ import { ThemeProvider } from './components/ThemeProvider';
 import { UserProfileModalProvider } from './components/UserProfileModal';
 import Layout from './components/Layout';
 import SplashScreen from './components/SplashScreen';
+import GenderPopup from './components/GenderPopup';
 import ActivitiesPage from './pages/ActivitiesPage';
 import CommunityPage from './pages/CommunityPage';
 import MarketPage from './pages/MarketPage';
@@ -55,6 +56,7 @@ export default function App() {
                     <Route path="/members" element={<MembersPage />} />
                   </Routes>
                 </Layout>
+                <GenderPopup />
               </Router>
             )}
           </UserProfileModalProvider>

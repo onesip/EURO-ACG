@@ -12,6 +12,7 @@ import ImageUpload from '../components/ImageUpload';
 import ShareButton from '../components/ShareButton';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
+import UserDisplayName from '../components/UserDisplayName';
 import { Post, PostType } from '../types';
 import { MessageCircle, Heart, Plus, X, AlertCircle, Lightbulb, Users, Flame, Globe, Sparkles, Edit, Trash2, Pin } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -464,7 +465,7 @@ export default function CommunityPage() {
                       onClick={() => showProfile(post.authorId, { displayName: post.authorName, photoURL: post.authorPhoto })}
                       className="text-sm font-semibold text-white hover:text-indigo-400 cursor-pointer transition-colors truncate"
                     >
-                      {post.authorName || `User ${post.authorId.substring(0, 4)}`}
+                      <UserDisplayName uid={post.authorId} fallbackName={post.authorName} />
                     </p>
                     <p className="text-xs text-slate-400">{post.createdAt ? new Date(post.createdAt.toMillis()).toLocaleString() : 'Just now'}</p>
                   </div>

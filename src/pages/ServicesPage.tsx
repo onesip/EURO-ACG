@@ -13,6 +13,7 @@ import EmbeddedMedia from '../components/EmbeddedMedia';
 import ShareButton from '../components/ShareButton';
 import { useUserProfileModal } from '../components/UserProfileModal';
 import UserAvatar from '../components/UserAvatar';
+import UserDisplayName from '../components/UserDisplayName';
 import { ServiceAd, ServiceType } from '../types';
 import { Plus, X, Camera, Sparkles, Scissors, Briefcase, Globe, Edit, Trash2, Flame, Pin, AlertCircle, Palette, Music, Hammer, LayoutGrid } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -343,7 +344,7 @@ export default function ServicesPage() {
                       onClick={() => showProfile(ad.authorId, { displayName: ad.authorName, photoURL: ad.authorPhoto })}
                       className="text-sm font-semibold text-white hover:text-indigo-400 cursor-pointer transition-colors truncate"
                     >
-                      {ad.authorName || `Provider ${ad.authorId.substring(0, 4)}`}
+                      <UserDisplayName uid={ad.authorId} fallbackName={ad.authorName} />
                     </p>
                     <p className="text-xs text-slate-400">{ad.createdAt ? new Date(ad.createdAt.toMillis()).toLocaleString() : 'Just now'}</p>
                   </div>

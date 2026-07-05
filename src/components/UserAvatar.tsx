@@ -1,7 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
-import { Gender } from '../types';
+import React from 'react';
+import { useUserProfile } from '../lib/useUserProfile';
 import { cn } from '../lib/utils';
 
 interface UserAvatarProps {
@@ -11,55 +9,18 @@ interface UserAvatarProps {
   className?: string;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   showGender?: boolean;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent) => void;
   key?: React.Key;
 }
 
-// Global cache for profiles to avoid redundant fetches across multiple instances
-const profileCache: Record<string, { gender: Gender; timestamp: number }> = {};
-const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
-
-export default function UserAvatar({ uid, photoURL, displayName, className, size = 'md', showGender = false, onClick }: UserAvatarProps) {
-  const [gender, setGender] = useState<Gender | undefined>();
-
-  useEffect(() => {
-    if (!showGender || !uid || !auth.currentUser) return;
-    
-    const fetchGender = async () => {
-      try {
-        // 1. Check memory cache first
-        const now = Date.now();
-        if (profileCache[uid] && (now - profileCache[uid].timestamp < CACHE_TTL)) {
-          setGender(profileCache[uid].gender);
-          return;
-        }
-
-        // 2. Check localStorage as second tier
-        const cached = localStorage.getItem(`gender_${uid}`);
-        if (cached) {
-          const genderValue = cached as Gender;
-          setGender(genderValue);
-          profileCache[uid] = { gender: genderValue, timestamp: now };
-          return;
-        }
-
-        // 3. Fetch from Firestore only if not cached
-        const userDoc = await getDoc(doc(db, 'users', uid));
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          if (data.gender) {
-            setGender(data.gender);
-            localStorage.setItem(`gender_${uid}`, data.gender);
-            profileCache[uid] = { gender: data.gender, timestamp: now };
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch gender for avatar', err);
-      }
-    };
-
-    fetchGender();
-  }, [uid, showGender]);
+export default function UserAvatar({ uid, photoURL: staticPhotoURL, displayName: staticDisplayName, className, size = 'md', showGender = false, onClick }: UserAvatarProps) {
+  // Use our real-time profile hook
+  const { profile } = useUserProfile(uid, staticDisplayName, staticPhotoURL);
+  
+  // Resolve actual name and avatar (live first, then fall back to static props)
+  const resolvedDisplayName = profile?.displayName || staticDisplayName || 'U';
+  const resolvedPhotoURL = profile?.photoURL || staticPhotoURL;
+  const resolvedGender = profile?.gender;
 
   const sizeClasses = {
     'xs': 'w-6 h-6 text-[8px]',
@@ -81,14 +42,16 @@ export default function UserAvatar({ uid, photoURL, displayName, className, size
     male: '♂️',
     female: '♀️',
     'non-binary': '⚧️',
-    'other': '✨'
+    'other': '✨',
+    'prefer-not-to-say': '❓'
   };
 
   const genderColors = {
     male: 'text-blue-400 border-blue-500/30',
     female: 'text-pink-400 border-pink-500/30',
     'non-binary': 'text-purple-400 border-purple-500/30',
-    'other': 'text-amber-400 border-amber-500/30'
+    'other': 'text-amber-400 border-amber-500/30',
+    'prefer-not-to-say': 'text-slate-400 border-slate-500/30'
   };
 
   return (
@@ -98,20 +61,22 @@ export default function UserAvatar({ uid, photoURL, displayName, className, size
         sizeClasses[size],
         className
       )}>
-        {photoURL ? (
-          <img src={photoURL} alt={displayName} className="w-full h-full object-cover" />
+        {resolvedPhotoURL ? (
+          <img src={resolvedPhotoURL} alt={resolvedDisplayName} className="w-full h-full object-cover" />
         ) : (
-          displayName ? displayName.charAt(0).toUpperCase() : 'U'
+          resolvedDisplayName ? resolvedDisplayName.charAt(0).toUpperCase() : 'U'
         )}
       </div>
       
-      {showGender && gender && (
+      {showGender && resolvedGender && resolvedGender !== 'prefer-not-to-say' && (
         <div className={cn(
           "absolute -bottom-0.5 -right-0.5 bg-[#141416] border rounded-full flex items-center justify-center shadow-lg z-10 animate-scaleIn",
           badgeSizeClasses[size],
-          genderColors[gender]
+          genderColors[resolvedGender as keyof typeof genderColors] || 'text-slate-400'
         )}>
-          <span className="leading-none flex items-center justify-center">{genderIcons[gender]}</span>
+          <span className="leading-none flex items-center justify-center">
+            {genderIcons[resolvedGender as keyof typeof genderIcons] || '✨'}
+          </span>
         </div>
       )}
     </div>

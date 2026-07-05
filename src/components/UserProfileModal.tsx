@@ -13,6 +13,8 @@ import {
 import { cn } from '../lib/utils';
 import { loadFromCache, saveToCache } from '../lib/cache';
 import PostContent from './PostContent';
+import UserAvatar from './UserAvatar';
+import UserDisplayName from './UserDisplayName';
 import { motion, AnimatePresence } from 'motion/react';
 import { sendNotification } from '../lib/notifications';
 
@@ -571,10 +573,17 @@ export function UserProfileModalProvider({ children }: { children: React.ReactNo
                     ) : (
                       reviews.map((rev) => (
                         <div key={rev.id} className="bg-white/5 p-3 rounded-2xl border border-white/5 flex gap-3 group animate-fadeIn">
-                          <img src={rev.authorPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${rev.authorId}`} className="w-8 h-8 rounded-full shrink-0 border border-white/10" alt="Avatar" />
+                          <UserAvatar 
+                            uid={rev.authorId} 
+                            photoURL={rev.authorPhoto} 
+                            displayName={rev.authorName} 
+                            size="sm" 
+                          />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-0.5">
-                              <span className="text-[10px] font-bold text-slate-400 truncate">{rev.authorName}</span>
+                              <span className="text-[10px] font-bold text-slate-400 truncate">
+                                <UserDisplayName uid={rev.authorId} fallbackName={rev.authorName} />
+                              </span>
                               <span className="text-[8px] text-slate-600 font-medium">{rev.createdAt?.toMillis() ? new Date(rev.createdAt.toMillis()).toLocaleDateString() : ''}</span>
                             </div>
                             <p className="text-xs text-slate-200 leading-relaxed">{rev.content}</p>
