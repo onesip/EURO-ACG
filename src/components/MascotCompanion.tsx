@@ -177,7 +177,7 @@ export default function MascotCompanion() {
                   {/* Top indicators */}
                   <div className="flex items-center gap-1.5 mb-1 text-[10px] text-indigo-400 font-extrabold tracking-wider uppercase">
                     <Sparkles className="w-3 h-3 text-pink-400 animate-pulse" />
-                    <span>Miku Companion</span>
+                    <span>{lang === 'zh' ? 'EU酱' : 'EU-chan'}</span>
                     <span className="text-slate-500">•</span>
                     <span className="text-pink-400">{STICKER_META[activeExpression].icon}</span>
                   </div>
@@ -235,10 +235,10 @@ export default function MascotCompanion() {
 
               {/* Companion Circle Frame */}
               <div className="relative group">
-                <button
-                  onClick={handleMascotClick}
+                <motion.button
+                  onTap={(e) => { e.stopPropagation(); handleMascotClick(); }}
                   className={cn(
-                    "relative p-1 bg-gradient-to-br from-indigo-500/30 via-pink-500/20 to-teal-400/20 rounded-full shadow-[0_4px_25px_rgba(99,102,241,0.35)] transition-all duration-300 cursor-pointer",
+                    "relative p-1 bg-gradient-to-br from-indigo-500/30 via-pink-500/20 to-teal-400/20 rounded-full shadow-[0_4px_25px_rgba(99,102,241,0.35)] transition-all duration-300 cursor-pointer block",
                     !isEdgeHidden && "hover:shadow-[0_4px_30px_rgba(244,114,182,0.45)] hover:scale-105 active:scale-95"
                   )}
                   title={isEdgeHidden ? (lang === 'zh' ? '点击唤醒' : 'Click to wake') : (lang === 'zh' ? '戳我换心情~' : 'Poke me for new vibes!')}
@@ -253,21 +253,21 @@ export default function MascotCompanion() {
                     showLabel={false}
                     className="relative z-10 w-12 h-12 sm:w-14 sm:h-14 border-2 border-white/10"
                   />
-                </button>
+                </motion.button>
 
                 {/* Minimize Companion Button */}
                 {!isEdgeHidden && (
-                  <button
-                    onClick={(e) => { 
+                  <motion.button
+                    onTap={(e) => { 
                       e.stopPropagation(); 
                       setIsEdgeHidden(false);
                       setIsMinimized(true); 
                     }}
                     className="absolute -top-1 -right-1 bg-slate-900 border border-white/15 text-slate-400 hover:text-white p-1 rounded-full shadow-lg z-20 pointer-events-auto hover:bg-red-950 transition-colors"
-                    title={lang === 'zh' ? '收起吉祥物' : 'Collapse Mascot'}
+                    title={lang === 'zh' ? '收起EU酱' : 'Collapse EU-chan'}
                   >
                     <X className="w-2.5 h-2.5" />
-                  </button>
+                  </motion.button>
                 )}
               </div>
             </motion.div>
@@ -281,13 +281,12 @@ export default function MascotCompanion() {
           <motion.button
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            onClick={() => {
-              if (isDragging) return;
+            onTap={() => {
               setIsEdgeHidden(false);
               setIsMinimized(false);
             }}
             className="p-2.5 bg-[#1b1c23] border border-indigo-500/40 text-indigo-400 hover:text-indigo-300 rounded-full shadow-[0_4px_20px_rgba(99,102,241,0.3)] hover:scale-110 active:scale-95 transition-all duration-200 flex items-center justify-center relative group"
-            title={lang === 'zh' ? '召唤吉祥物' : 'Summon Mascot'}
+            title={lang === 'zh' ? '召唤EU酱' : 'Summon EU-chan'}
           >
             {/* Badge indicator */}
             <span className="absolute -top-1.5 -right-1.5 bg-pink-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-bold animate-bounce shadow-sm">

@@ -545,8 +545,8 @@ export default function MoyuChatroom() {
       if (chatType === 'private' && selectedFriendUid) {
         const titleZh = "✨ 收到同好表情包！";
         const titleEn = "✨ New Sticker Received!";
-        const contentZh = `💬 【${profile?.displayName || '神秘萌友'}】向你投递了一个可爱的吉祥物表情包！(〃>▽<〃)/* 快去瞧瞧~`;
-        const contentEn = `💬 【${profile?.displayName || 'ACG Pal'}】sent you a cute mascot sticker! (〃>▽<〃)/* Go check it out!`;
+        const contentZh = `💬 【${profile?.displayName || '神秘萌友'}】向你投递了一个可爱的EU酱表情包！(〃>▽<〃)/* 快去瞧瞧~`;
+        const contentEn = `💬 【${profile?.displayName || 'ACG Pal'}】sent you a cute EU-chan sticker! (〃>▽<〃)/* Go check it out!`;
 
         await sendNotification(
           selectedFriendUid,
@@ -1203,7 +1203,7 @@ export default function MoyuChatroom() {
                 <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
                   <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-indigo-400 uppercase tracking-wider">
                     <Smile className="w-3.5 h-3.5 text-pink-400" />
-                    <span>{isChinese ? 'Miku 吉祥物专属表情包' : 'Miku Mascot Stickers'}</span>
+                    <span>{isChinese ? 'EU酱 专属表情包' : 'EU-chan Stickers'}</span>
                   </div>
                   <button 
                     type="button"
@@ -1251,7 +1251,7 @@ export default function MoyuChatroom() {
                       ? "bg-pink-500/25 border-pink-500/40 text-pink-300" 
                       : "bg-white/[0.03] hover:bg-white/[0.06] border-white/5 hover:border-white/10 text-slate-400 hover:text-slate-200"
                   )}
-                  title={isChinese ? "发送吉祥物表情" : "Mascot Stickers"}
+                  title={isChinese ? "发送EU酱表情" : "EU-chan Stickers"}
                 >
                   <Smile className="w-4 h-4" />
                 </button>

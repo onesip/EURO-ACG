@@ -308,7 +308,7 @@ export default function InAppNoticeOverlay() {
               <div className="flex items-center justify-between pt-2">
                 <div className="flex items-center gap-2 text-[11px] text-indigo-400 font-bold">
                   <span>(。・ω・。)</span>
-                  <span>{lang === 'zh' ? 'Miku 友情播报' : 'Miku broadcast'}</span>
+                  <span>{lang === 'zh' ? 'EU酱 友情播报' : 'EU-chan broadcast'}</span>
                 </div>
                 <button
                   onClick={handleCloseAnnouncement}

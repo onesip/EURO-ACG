@@ -506,7 +506,13 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
                     <span className="text-slate-500">{lang === 'zh' ? '消息管理' : 'Message Management'}</span>
                     <button
                       onClick={handleMarkAllRead}
-                      className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors font-semibold"
+                      disabled={notifications.every(n => n.isRead)}
+                      className={cn(
+                        "flex items-center gap-1 transition-colors font-semibold",
+                        notifications.some(n => !n.isRead) 
+                          ? "text-indigo-400 hover:text-indigo-300" 
+                          : "text-slate-600 cursor-not-allowed"
+                      )}
                     >
                       <CheckCheck className="w-3.5 h-3.5" />
                       <span>{lang === 'zh' ? '一键已读所有信息' : 'Read All Messages'}</span>
