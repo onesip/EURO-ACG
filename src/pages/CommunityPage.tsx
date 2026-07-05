@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
 import { collection, query, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
@@ -57,6 +57,9 @@ export default function CommunityPage() {
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryParams = new URLSearchParams(location.search);
+  const sharedId = queryParams.get('id');
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -64,6 +67,18 @@ export default function CommunityPage() {
       setViewMode('chat');
     }
   }, [location.search]);
+
+  useEffect(() => {
+    if (sharedId && posts.length > 0) {
+      const post = posts.find(p => p.id === sharedId);
+      if (post) {
+        const originalTitle = document.title;
+        const preview = post.content.length > 20 ? `${post.content.substring(0, 20)}...` : post.content;
+        document.title = lang === 'zh' ? `我嘞个惊为天人：${preview}` : `A must-see post: ${preview}`;
+        return () => { document.title = originalTitle; };
+      }
+    }
+  }, [sharedId, posts, lang]);
 
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
@@ -267,7 +282,9 @@ export default function CommunityPage() {
     fetchData();
   }, [user, activeTab, activeSubCategory, selectedCountry, isQuotaExceeded]);
 
-  const filteredPosts = posts;
+  const filteredPosts = sharedId 
+    ? posts.filter(p => p.id === sharedId) 
+    : posts;
 
   const TIPS_SUB_CATEGORIES = [
     { id: 'all', label: '全部安利' },
@@ -431,6 +448,38 @@ export default function CommunityPage() {
         </div>
       )}
 
+      {/* Shared ID Highlight Alert */}
+      {sharedId && filteredPosts.length > 0 && (
+        <div className="space-y-4">
+          <div className="p-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl animate-pulse shadow-xl shadow-indigo-500/10">
+            <div className="bg-slate-950 px-5 py-4 rounded-[22px] flex flex-col sm:flex-row gap-4 items-center justify-between border border-indigo-500/10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30 shrink-0">
+                  <Sparkles className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-tight">
+                    {lang === 'zh' ? '已直达此精彩帖子！' : 'Direct link to this post!'}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    {lang === 'zh' ? '正在查看特定分享帖子，您可以参与互动或点击右侧查看全部' : 'Viewing a specific shared post, click right to see all posts'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/community');
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer shrink-0"
+              >
+                {lang === 'zh' ? '查看全部帖子' : 'Show All Posts'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500 animate-pulse">
@@ -504,7 +553,13 @@ export default function CommunityPage() {
                   <button className="flex items-center gap-1.5 text-slate-400 hover:text-indigo-400 transition-colors text-sm font-medium">
                     <MessageCircle className="w-4 h-4" /> {t('com.comment')} ({post.commentCount ?? 0})
                   </button>
-                  <ShareButton path="community" id={post.id} title={lang === 'zh' ? '分享帖子' : 'Share post'} />
+                  <ShareButton 
+                    path="community" 
+                    id={post.id} 
+                    title={post.content} 
+                    type="post"
+                    authorName={post.authorName}
+                  />
                 </div>
 
                 {user && post.authorId === user.uid && (

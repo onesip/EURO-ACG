@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
 import { collection, query, orderBy, addDoc, serverTimestamp, doc, getDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, where } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
@@ -57,6 +57,21 @@ export default function ServicesPage() {
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryParams = new URLSearchParams(location.search);
+  const sharedId = queryParams.get('id');
+
+  useEffect(() => {
+    if (sharedId && ads.length > 0) {
+      const ad = ads.find(a => a.id === sharedId);
+      if (ad) {
+        const originalTitle = document.title;
+        const preview = ad.content.length > 20 ? `${ad.content.substring(0, 20)}...` : ad.content;
+        document.title = lang === 'zh' ? `我嘞个惊为天人：${preview}` : `A must-see service: ${preview}`;
+        return () => { document.title = originalTitle; };
+      }
+    }
+  }, [sharedId, ads, lang]);
 
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
@@ -209,7 +224,9 @@ export default function ServicesPage() {
     fetchData();
   }, [user, activeTab, selectedCountry, isQuotaExceeded]);
 
-  const filteredAds = ads;
+  const filteredAds = sharedId 
+    ? ads.filter(a => a.id === sharedId) 
+    : ads;
 
   return (
     <div className="space-y-6 animate-fadeIn pb-12">
@@ -310,6 +327,38 @@ export default function ServicesPage() {
         ))}
       </div>
 
+      {/* Shared ID Highlight Alert */}
+      {sharedId && filteredAds.length > 0 && (
+        <div className="space-y-4">
+          <div className="p-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl animate-pulse shadow-xl shadow-indigo-500/10">
+            <div className="bg-slate-950 px-5 py-4 rounded-[22px] flex flex-col sm:flex-row gap-4 items-center justify-between border border-indigo-500/10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30 shrink-0">
+                  <Sparkles className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-tight">
+                    {lang === 'zh' ? '已直达此精彩服务信息！' : 'Direct link to this service!'}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    {lang === 'zh' ? '正在查看特定分享服务，您可以进行撑腰互动或点击右侧查看全部' : 'Viewing a specific shared service, click right to see all services'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/services');
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer shrink-0"
+              >
+                {lang === 'zh' ? '查看全部服务' : 'Show All Services'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500 animate-pulse">
@@ -393,7 +442,13 @@ export default function ServicesPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <ShareButton path="services" id={ad.id} title={lang === 'zh' ? '分享服务' : 'Share Service'} />
+                  <ShareButton 
+                    path="services" 
+                    id={ad.id} 
+                    title={ad.content} 
+                    type="service"
+                    authorName={ad.authorName}
+                  />
                   <button
                     onClick={() => handleSupport(ad.id, ad.supports)}
                     className={cn(

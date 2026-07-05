@@ -723,7 +723,15 @@ export default function ActivitiesPage() {
                         ({activity.commentCount ?? 0})
                       </button>
                     )}
-                    <ShareButton path="" id={activity.id} title={lang === 'zh' ? `团咪开团我秒跟：${activity.title}` : `Join my activity: ${activity.title}`} />
+                    <ShareButton 
+                      path="" 
+                      id={activity.id} 
+                      title={activity.title} 
+                      type="activity"
+                      dateTime={activity.date}
+                      location={activity.location}
+                      authorName={activity.creatorName || '次元居民'}
+                    />
                   </div>
                 </div>
               

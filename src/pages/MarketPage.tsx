@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { GUEST_LIST_LIMIT, USER_LIST_LIMIT, EMERGENCY_GUEST_FIRESTORE_OFF } from '../config/limits';
 import { collection, query, orderBy, addDoc, serverTimestamp, where, doc, getDoc, updateDoc, deleteDoc, arrayUnion, arrayRemove, limit, getDocs, increment, runTransaction } from 'firebase/firestore';
 // import { onSnapshot } from 'firebase/firestore';
@@ -30,6 +30,26 @@ export default function MarketPage() {
   const { t, lang } = useLanguage();
   const { showProfile } = useUserProfileModal();
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryParams = new URLSearchParams(location.search);
+  const sharedId = queryParams.get('id');
+
+  useEffect(() => {
+    if (sharedId && posts.length > 0) {
+      const post = posts.find(p => p.id === sharedId);
+      if (post) {
+        const originalTitle = document.title;
+        const itemTitle = post.title || post.content || '';
+        const preview = itemTitle.length > 20 ? `${itemTitle.substring(0, 20)}...` : itemTitle;
+        document.title = lang === 'zh' ? `我嘞个惊为天人：${preview}` : `A must-see item: ${preview}`;
+        return () => { document.title = originalTitle; };
+      }
+    }
+  }, [sharedId, posts, lang]);
+
+  const filteredPosts = sharedId 
+    ? posts.filter(p => p.id === sharedId) 
+    : posts;
 
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
@@ -251,14 +271,46 @@ export default function MarketPage() {
         </div>
       )}
 
+      {/* Shared ID Highlight Alert */}
+      {sharedId && filteredPosts.length > 0 && (
+        <div className="space-y-4 col-span-full mb-4">
+          <div className="p-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-3xl animate-pulse shadow-xl shadow-indigo-500/10">
+            <div className="bg-slate-950 px-5 py-4 rounded-[22px] flex flex-col sm:flex-row gap-4 items-center justify-between border border-indigo-500/10">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-500/20 rounded-2xl flex items-center justify-center border border-indigo-500/30 shrink-0">
+                  <Sparkles className="w-6 h-6 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-tight">
+                    {lang === 'zh' ? '已直达此闲置宝贝！' : 'Direct link to this item!'}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium">
+                    {lang === 'zh' ? '正在查看特定分享闲置，您可以联系同好或点击右侧查看全部' : 'Viewing a specific shared item, click right to see all items'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/market');
+                }}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer shrink-0"
+              >
+                {lang === 'zh' ? '查看全部闲置' : 'Show All Items'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-500 animate-pulse col-span-full">
             <Sparkles className="w-8 h-8 mb-2 opacity-20" />
             <p className="text-sm font-medium">{lang === 'zh' ? '正在连接集市...' : 'Connecting to market...'}</p>
           </div>
-        ) : posts.length > 0 ? (
-          posts.map((post) => (
+        ) : filteredPosts.length > 0 ? (
+          filteredPosts.map((post) => (
             <div key={post.id} className={cn(
               "bg-[#141416] p-6 rounded-2xl border transition-all flex flex-col h-full group relative",
               post.isPinned ? "border-indigo-500/50 bg-indigo-500/[0.02]" : "border-white/5 hover:border-indigo-500/30"
@@ -317,7 +369,13 @@ export default function MarketPage() {
                   >
                     {t('mkt.contact')} ({post.commentCount ?? 0})
                   </button>
-                  <ShareButton path="market" id={post.id} title={post.title || (lang === 'zh' ? '分享二手物品' : 'Share Market Item')} />
+                  <ShareButton 
+                    path="market" 
+                    id={post.id} 
+                    title={post.title || post.content || ''} 
+                    type="market"
+                    authorName={post.authorName}
+                  />
                 </div>
               </div>
             </div>
