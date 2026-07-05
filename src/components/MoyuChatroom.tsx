@@ -78,15 +78,19 @@ export default function MoyuChatroom() {
 
   useEffect(() => {
     const friendUid = searchParams.get('friend');
-    if (friendUid) {
+    if (friendUid && user) {
       setChatType('private');
       setSelectedFriendUid(friendUid);
+      const minId = user.uid < friendUid ? user.uid : friendUid;
+      const maxId = user.uid > friendUid ? user.uid : friendUid;
+      setActiveChannelId(`pv_${minId}_${maxId}`);
+
       // Clean up search param from the URL
       const newParams = new URLSearchParams(searchParams);
       newParams.delete('friend');
       setSearchParams(newParams, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, user]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isChinese = lang === 'zh';
@@ -117,57 +121,48 @@ export default function MoyuChatroom() {
           return;
         }
 
-        // Fetch user profiles for each friend in chunks of 10 to avoid N+1 queries
-        const chunks = [];
-        for (let i = 0; i < friendIds.length; i += 10) {
-          chunks.push(friendIds.slice(i, i + 10));
-        }
-
-        const fetchedFriendsMap = new Map();
-        
-        for (const chunk of chunks) {
-          const uncachedIds = [];
-          for (const fid of chunk) {
-            const cachedProfile = loadFromCache<UserProfile>(`cached_user_profile_${fid}`);
-            if (cachedProfile) {
-              fetchedFriendsMap.set(fid, {
-                uid: fid,
-                displayName: cachedProfile.displayName || 'Moyu Friend',
-                photoURL: cachedProfile.photoURL || '',
-                role: cachedProfile.role || 'other'
-              });
-            } else {
-              uncachedIds.push(fid);
-            }
-          }
-
-          if (uncachedIds.length > 0) {
+        // Fetch user profiles for each friend safely using document ID
+        const fetchedFriends = [];
+        for (const fid of friendIds) {
+          const cachedProfile = loadFromCache<UserProfile>(`cached_user_profile_${fid}`);
+          if (cachedProfile) {
+            fetchedFriends.push({
+              uid: fid,
+              displayName: cachedProfile.displayName || (isChinese ? '二次元萌友' : 'Moyu Friend'),
+              photoURL: cachedProfile.photoURL || '',
+              role: cachedProfile.role || 'other'
+            });
+          } else {
             try {
-              const usersRef = collection(db, 'users');
-              const q = query(usersRef, where('uid', 'in', uncachedIds));
-              const userSnap = await getDocs(q);
-              userSnap.forEach(docSnap => {
-                const uData = docSnap.data() as UserProfile;
-                saveToCache(`cached_user_profile_${uData.uid}`, uData, 300000);
-                fetchedFriendsMap.set(uData.uid, {
-                  uid: uData.uid,
-                  displayName: uData.displayName || 'Moyu Friend',
+              const uSnap = await getDoc(doc(db, 'users', fid));
+              if (uSnap.exists()) {
+                const uData = uSnap.data() as UserProfile;
+                saveToCache(`cached_user_profile_${fid}`, uData, 300000);
+                fetchedFriends.push({
+                  uid: fid,
+                  displayName: uData.displayName || (isChinese ? '二次元萌友' : 'Moyu Friend'),
                   photoURL: uData.photoURL || '',
                   role: uData.role || 'other'
                 });
-              });
+              } else {
+                fetchedFriends.push({
+                  uid: fid,
+                  displayName: isChinese ? '次元居民' : 'Moyu Member',
+                  photoURL: '',
+                  role: 'other'
+                });
+              }
             } catch (err) {
-              console.error(`Error loading profiles for chunk in real-time:`, err);
+              console.error(`Error loading profile for friend ${fid}:`, err);
+              fetchedFriends.push({
+                uid: fid,
+                displayName: isChinese ? '次元居民' : 'Moyu Member',
+                photoURL: '',
+                role: 'other'
+              });
             }
           }
         }
-
-        const fetchedFriends = friendIds.map(fid => fetchedFriendsMap.get(fid) || {
-          uid: fid,
-          displayName: 'Moyu Member',
-          photoURL: '',
-          role: 'other'
-        });
 
         setFriendsList(fetchedFriends);
       } catch (err: any) {
@@ -176,7 +171,7 @@ export default function MoyuChatroom() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [user, isChinese]);
 
   // Handle switching private / public
   const handleSelectFriend = (friendUid: string) => {
