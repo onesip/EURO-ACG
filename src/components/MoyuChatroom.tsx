@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc, onSnapshot, documentId, writeBatch } from 'firebase/firestore';
+import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc, onSnapshot, documentId, writeBatch, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
@@ -456,8 +456,9 @@ export default function MoyuChatroom() {
     }
 
     const q = query(
-      collection(db, 'chats'),
-      where('channelId', '==', activeChannelId)
+      collection(db, 'chat_messages', activeChannelId, 'messages'),
+      orderBy('timestamp', 'desc'),
+      limit(50)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -530,7 +531,7 @@ export default function MoyuChatroom() {
     setMessages(prev => [...prev, optimMessage]);
 
     try {
-      await addDoc(collection(db, 'chats'), {
+      await addDoc(collection(db, 'chat_messages', activeChannelId, 'messages'), {
         channelId: activeChannelId,
         senderId: user.uid,
         senderName: profile?.displayName || user.displayName || '二次元居民',
@@ -600,7 +601,7 @@ export default function MoyuChatroom() {
     setMessages(prev => [...prev, optimMessage]);
 
     try {
-      await addDoc(collection(db, 'chats'), {
+      await addDoc(collection(db, 'chat_messages', activeChannelId, 'messages'), {
         channelId: activeChannelId,
         senderId: user.uid,
         senderName: profile?.displayName || user.displayName || '二次元居民',
