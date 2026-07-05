@@ -57,6 +57,13 @@ export default function CommunityPage() {
   const { showProfile } = useUserProfileModal();
   const location = useLocation();
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('friend') || params.get('tab') === 'chat') {
+      setViewMode('chat');
+    }
+  }, [location.search]);
+
   const isAdmin = user?.email === 'zhengjiaru2018@gmail.com';
 
   const handleLike = async (postId: string, currentLikes: string[] = []) => {

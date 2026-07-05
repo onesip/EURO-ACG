@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../components/AuthProvider';
 import { db } from '../lib/firebase';
-import { doc, setDoc, collection, query, where, getDocs, getDoc, updateDoc, deleteDoc, serverTimestamp, addDoc, orderBy } from 'firebase/firestore';
+import { doc, setDoc, collection, query, where, getDocs, getDoc, updateDoc, deleteDoc, serverTimestamp, addDoc, orderBy, onSnapshot } from 'firebase/firestore';
 import { UserRole, Gender } from '../types';
 import { Save, LogIn, Sparkles, MapPin, Palette, RefreshCw, Users, UserCheck, Check, X, MessageSquare, Trash2, Edit2, ShieldAlert } from 'lucide-react';
 import { loginWithGoogle } from '../lib/firebase';
@@ -39,121 +39,138 @@ export default function ProfilePage() {
   const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
   const [friendsList, setFriendsList] = useState<any[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
-
-  const fetchFriendsAndRequests = async () => {
-    if (!user) return;
-    setLoadingFriends(true);
-    try {
-      // 1. Fetch pending incoming requests
-      const qRequests = query(
-        collection(db, 'friendRequests'),
-        where('toId', '==', user.uid),
-        where('status', '==', 'pending')
-      );
-      const snapRequests = await getDocs(qRequests);
-      const reqs = [];
-      for (const docSnap of snapRequests.docs) {
-        const data = docSnap.data();
-        let fromName = data.fromName;
-        let fromPhoto = data.fromPhoto;
-        try {
-          const uSnap = await getDoc(doc(db, 'users', data.fromId));
-          if (uSnap.exists()) {
-            const uData = uSnap.data();
-            fromName = uData.displayName || fromName;
-            fromPhoto = uData.photoURL || fromPhoto;
-          }
-        } catch (e) {
-          console.error("Error fetching sender profile details for request:", e);
-        }
-        reqs.push({
-          id: docSnap.id,
-          ...data,
-          fromName: fromName || (lang === 'zh' ? '次元同好' : 'Moyu Pal'),
-          fromPhoto: fromPhoto || ''
-        });
-      }
-      setIncomingRequests(reqs);
-
-      // 1b. Fetch pending outgoing requests (requests sent by current user)
-      const qSent = query(
-        collection(db, 'friendRequests'),
-        where('fromId', '==', user.uid),
-        where('status', '==', 'pending')
-      );
-      const snapSent = await getDocs(qSent);
-      const sentList = [];
-      for (const d of snapSent.docs) {
-        const data = d.data();
-        try {
-          const uSnap = await getDoc(doc(db, 'users', data.toId));
-          if (uSnap.exists()) {
-            const uData = uSnap.data();
-            sentList.push({
-              id: d.id,
-              toId: data.toId,
-              toName: uData.displayName || (lang === 'zh' ? '次元同好' : 'Moyu Pal'),
-              toPhoto: uData.photoURL || '',
-              role: uData.role || 'other'
-            });
-          }
-        } catch (e) {
-          console.error("Error fetching target profile for sent request:", e);
-        }
-      }
-      setOutgoingRequests(sentList);
-
-      // 2. Fetch friends list from subcollection
-      const friendsRef = collection(db, 'users', user.uid, 'friends');
-      const snapFriends = await getDocs(friendsRef);
-      const friendIds = snapFriends.docs.map(d => d.id);
-
-      if (friendIds.length === 0) {
-        setFriendsList([]);
-        setLoadingFriends(false);
-        return;
-      }
-
-      // Fetch user profiles for friends
-      const list = [];
-      for (const fid of friendIds) {
-        try {
-          const uSnap = await getDoc(doc(db, 'users', fid));
-          if (uSnap.exists()) {
-            const uData = uSnap.data();
-            list.push({
-              uid: fid,
-              displayName: uData.displayName || (lang === 'zh' ? '二次元萌友' : 'Moyu Friend'),
-              photoURL: uData.photoURL || '',
-              role: uData.role || 'other'
-            });
-          }
-        } catch (e) {
-          console.error("Error fetching friend profile:", e);
-        }
-      }
-      setFriendsList(list);
-    } catch (err) {
-      console.error("Error fetching friends/requests:", err);
-    } finally {
-      setLoadingFriends(false);
-    }
-  };
+  const [syncTrigger, setSyncTrigger] = useState(0);
 
   useEffect(() => {
-    if (user) {
-      fetchFriendsAndRequests();
+    if (!user) {
+      setIncomingRequests([]);
+      setOutgoingRequests([]);
+      setFriendsList([]);
+      return;
     }
-  }, [user]);
+
+    setLoadingFriends(true);
+
+    // 1. Listen to incoming requests
+    const qRequests = query(
+      collection(db, 'friendRequests'),
+      where('toId', '==', user.uid),
+      where('status', '==', 'pending')
+    );
+    const unsubscribeIncoming = onSnapshot(qRequests, async (snapshot) => {
+      try {
+        const reqs = [];
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          let fromName = data.fromName;
+          let fromPhoto = data.fromPhoto;
+          try {
+            const uSnap = await getDoc(doc(db, 'users', data.fromId));
+            if (uSnap.exists()) {
+              const uData = uSnap.data();
+              fromName = uData.displayName || fromName;
+              fromPhoto = uData.photoURL || fromPhoto;
+            }
+          } catch (e) {
+            console.error("Error fetching sender profile details for request:", e);
+          }
+          reqs.push({
+            id: docSnap.id,
+            ...data,
+            fromName: fromName || (lang === 'zh' ? '次元同好' : 'Moyu Pal'),
+            fromPhoto: fromPhoto || ''
+          });
+        }
+        setIncomingRequests(reqs);
+      } catch (err) {
+        console.error("Error updating incoming requests real-time:", err);
+      }
+    });
+
+    // 2. Listen to outgoing requests
+    const qSent = query(
+      collection(db, 'friendRequests'),
+      where('fromId', '==', user.uid),
+      where('status', '==', 'pending')
+    );
+    const unsubscribeOutgoing = onSnapshot(qSent, async (snapshot) => {
+      try {
+        const sentList = [];
+        for (const d of snapshot.docs) {
+          const data = d.data();
+          try {
+            const uSnap = await getDoc(doc(db, 'users', data.toId));
+            if (uSnap.exists()) {
+              const uData = uSnap.data();
+              sentList.push({
+                id: d.id,
+                toId: data.toId,
+                toName: uData.displayName || (lang === 'zh' ? '次元同好' : 'Moyu Pal'),
+                toPhoto: uData.photoURL || '',
+                role: uData.role || 'other'
+              });
+            }
+          } catch (e) {
+            console.error("Error fetching target profile for sent request:", e);
+          }
+        }
+        setOutgoingRequests(sentList);
+      } catch (err) {
+        console.error("Error updating outgoing requests real-time:", err);
+      }
+    });
+
+    // 3. Listen to friends list
+    const friendsRef = collection(db, 'users', user.uid, 'friends');
+    const unsubscribeFriends = onSnapshot(friendsRef, async (snapshot) => {
+      try {
+        const friendIds = snapshot.docs.map(d => d.id);
+        if (friendIds.length === 0) {
+          setFriendsList([]);
+          setLoadingFriends(false);
+          return;
+        }
+
+        const list = [];
+        for (const fid of friendIds) {
+          try {
+            const uSnap = await getDoc(doc(db, 'users', fid));
+            if (uSnap.exists()) {
+              const uData = uSnap.data();
+              list.push({
+                uid: fid,
+                displayName: uData.displayName || (lang === 'zh' ? '二次元萌友' : 'Moyu Friend'),
+                photoURL: uData.photoURL || '',
+                role: uData.role || 'other'
+              });
+            }
+          } catch (e) {
+            console.error("Error fetching friend profile:", e);
+          }
+        }
+        setFriendsList(list);
+        setLoadingFriends(false);
+      } catch (err) {
+        console.error("Error updating friends list real-time:", err);
+        setLoadingFriends(false);
+      }
+    });
+
+    return () => {
+      unsubscribeIncoming();
+      unsubscribeOutgoing();
+      unsubscribeFriends();
+    };
+  }, [user, lang, syncTrigger]);
 
   const handleAcceptRequest = async (reqId: string, senderId: string) => {
     try {
       await updateDoc(doc(db, 'friendRequests', reqId), { status: 'accepted' });
-      await setDoc(doc(db, 'users', user.uid, 'friends', senderId), { uid: senderId, createdAt: serverTimestamp() });
-      await setDoc(doc(db, 'users', senderId, 'friends', user.uid), { uid: user.uid, createdAt: serverTimestamp() });
+      await setDoc(doc(db, 'users', user!.uid, 'friends', senderId), { uid: senderId, createdAt: serverTimestamp() });
+      await setDoc(doc(db, 'users', senderId, 'friends', user!.uid), { uid: user!.uid, createdAt: serverTimestamp() });
       
       // Clear friends cache to force instant refresh
-      localStorage.removeItem(`user_friends_list_${user.uid}`);
+      localStorage.removeItem(`user_friends_list_${user!.uid}`);
       localStorage.removeItem(`user_friends_list_${senderId}`);
       
       // Dispatch friend request acceptance notification
@@ -164,7 +181,7 @@ export default function ProfilePage() {
       
       await sendNotification(
         senderId,
-        user.uid,
+        user!.uid,
         profile?.displayName || 'Moyu Pal',
         profile?.photoURL || '',
         'friend_accept',
@@ -174,7 +191,6 @@ export default function ProfilePage() {
       );
 
       alert(lang === 'zh' ? '🎉 已通过好友请求！你们现在可以开始私聊啦！' : 'Friend request accepted! You can now chat privately!');
-      fetchFriendsAndRequests();
     } catch (err) {
       console.error(err);
       alert(lang === 'zh' ? '处理请求失败，请稍后重试' : 'Failed to accept request');
@@ -185,7 +201,6 @@ export default function ProfilePage() {
     try {
       await updateDoc(doc(db, 'friendRequests', reqId), { status: 'rejected' });
       alert(lang === 'zh' ? '已拒绝好友请求' : 'Friend request declined');
-      fetchFriendsAndRequests();
     } catch (err) {
       console.error(err);
       alert(lang === 'zh' ? '操作失败，请稍后重试' : 'Action failed');
@@ -198,7 +213,6 @@ export default function ProfilePage() {
       await deleteDoc(doc(db, 'users', user.uid, 'friends', friendId));
       await deleteDoc(doc(db, 'users', friendId, 'friends', user.uid));
       alert(lang === 'zh' ? '已解除好友关系' : 'Friend removed');
-      fetchFriendsAndRequests();
     } catch (err) {
       console.error(err);
       alert(lang === 'zh' ? '删除失败，请稍后重试' : 'Failed to remove friend');
@@ -455,7 +469,7 @@ export default function ProfilePage() {
             </h2>
           </div>
           <button
-            onClick={fetchFriendsAndRequests}
+            onClick={() => setSyncTrigger(prev => prev + 1)}
             disabled={loadingFriends}
             className="p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-white/5 rounded-lg transition-colors flex items-center gap-1 text-[11px]"
             title={lang === 'zh' ? '刷新契约列表' : 'Sync contracts'}
