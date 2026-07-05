@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc, onSnapshot, documentId } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
@@ -123,44 +123,42 @@ export default function MoyuChatroom() {
 
         // Fetch user profiles for each friend safely using document ID
         const fetchedFriends = [];
+        
+        // Split friendIds into chunks of 30 because Firestore limits 'in' queries to 30 elements
+        const chunks = [];
+        for (let i = 0; i < friendIds.length; i += 30) {
+          chunks.push(friendIds.slice(i, i + 30));
+        }
+
+        for (const chunk of chunks) {
+          try {
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where(documentId(), 'in', chunk));
+            const userSnap = await getDocs(q);
+            userSnap.forEach(docSnap => {
+              const uData = docSnap.data() as UserProfile;
+              fetchedFriends.push({
+                uid: docSnap.id,
+                displayName: uData.displayName || (isChinese ? '二次元萌友' : 'Moyu Friend'),
+                photoURL: uData.photoURL || '',
+                role: uData.role || 'other'
+              });
+            });
+          } catch (err) {
+            console.error("Error fetching profiles chunk:", err);
+          }
+        }
+
+        // Fill in any friends whose profile we couldn't fetch
+        const fetchedUids = new Set(fetchedFriends.map(f => f.uid));
         for (const fid of friendIds) {
-          const cachedProfile = loadFromCache<UserProfile>(`cached_user_profile_${fid}`);
-          if (cachedProfile) {
+          if (!fetchedUids.has(fid)) {
             fetchedFriends.push({
               uid: fid,
-              displayName: cachedProfile.displayName || (isChinese ? '二次元萌友' : 'Moyu Friend'),
-              photoURL: cachedProfile.photoURL || '',
-              role: cachedProfile.role || 'other'
+              displayName: isChinese ? '次元居民' : 'Moyu Member',
+              photoURL: '',
+              role: 'other'
             });
-          } else {
-            try {
-              const uSnap = await getDoc(doc(db, 'users', fid));
-              if (uSnap.exists()) {
-                const uData = uSnap.data() as UserProfile;
-                saveToCache(`cached_user_profile_${fid}`, uData, 300000);
-                fetchedFriends.push({
-                  uid: fid,
-                  displayName: uData.displayName || (isChinese ? '二次元萌友' : 'Moyu Friend'),
-                  photoURL: uData.photoURL || '',
-                  role: uData.role || 'other'
-                });
-              } else {
-                fetchedFriends.push({
-                  uid: fid,
-                  displayName: isChinese ? '次元居民' : 'Moyu Member',
-                  photoURL: '',
-                  role: 'other'
-                });
-              }
-            } catch (err) {
-              console.error(`Error loading profile for friend ${fid}:`, err);
-              fetchedFriends.push({
-                uid: fid,
-                displayName: isChinese ? '次元居民' : 'Moyu Member',
-                photoURL: '',
-                role: 'other'
-              });
-            }
           }
         }
 
@@ -168,6 +166,8 @@ export default function MoyuChatroom() {
       } catch (err: any) {
         console.error("Error in real-time friends list sync:", err);
       }
+    }, (err) => {
+      console.error("Friends list onSnapshot error:", err);
     });
 
     return () => unsubscribe();
@@ -184,6 +184,13 @@ export default function MoyuChatroom() {
       setActiveChannelId(`pv_${minId}_${maxId}`);
     }
   };
+
+  // Automatically select the first friend if in private mode but no friend is selected yet
+  useEffect(() => {
+    if (chatType === 'private' && !selectedFriendUid && friendsList.length > 0) {
+      handleSelectFriend(friendsList[0].uid);
+    }
+  }, [chatType, selectedFriendUid, friendsList]);
 
   const handleSelectChannel = (channelId: string) => {
     setActiveChannelId(channelId);
@@ -426,12 +433,6 @@ export default function MoyuChatroom() {
           <button
             onClick={() => {
               setChatType('private');
-              if (friendsList.length > 0) {
-                handleSelectFriend(friendsList[0].uid);
-              } else {
-                setSelectedFriendUid(null);
-                setActiveChannelId('');
-              }
             }}
             className={cn(
               "flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-all",
