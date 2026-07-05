@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
 import { db } from '../lib/firebase';
-import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, writeBatch, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, onSnapshot, doc, updateDoc, writeBatch, getDocs, deleteDoc, setDoc, serverTimestamp, addDoc } from 'firebase/firestore';
 import { Bell, BellRing, Check, CheckCheck, Trash2, X, Sparkles, MessageSquare, Heart, UserPlus, Volume2, VolumeX, ArrowRight } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { AppNotification } from '../lib/notifications';
@@ -65,9 +65,96 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
     return saved !== 'false';
   });
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [friendRequests, setFriendRequests] = useState<any[]>([]);
 
   const appLoadTime = useRef(Date.now());
   const processedToasts = useRef<Set<string>>(new Set());
+
+  // Real-time listener for pending friend requests
+  useEffect(() => {
+    if (!user) {
+      setFriendRequests([]);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'friendRequests'),
+      where('toId', '==', user.uid),
+      where('status', '==', 'pending')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: any[] = [];
+      snapshot.forEach(docSnap => {
+        list.push({
+          id: docSnap.id,
+          ...docSnap.data()
+        });
+      });
+      setFriendRequests(list);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Handle accepting a friend request
+  const handleAcceptFriendRequest = async (req: any) => {
+    if (!user) return;
+    try {
+      const batch = writeBatch(db);
+      
+      // Update request status to accepted
+      batch.update(doc(db, 'friendRequests', req.id), { status: 'accepted' });
+      
+      // Add to friends subcollection for both users
+      batch.set(doc(db, 'users', user.uid, 'friends', req.fromId), { 
+        uid: req.fromId, 
+        createdAt: serverTimestamp() 
+      });
+      batch.set(doc(db, 'users', req.fromId, 'friends', user.uid), { 
+        uid: user.uid, 
+        createdAt: serverTimestamp() 
+      });
+      
+      await batch.commit();
+      
+      // Clear cache to force instant refresh in components
+      localStorage.removeItem(`user_friends_list_${user.uid}`);
+      localStorage.removeItem(`user_friends_list_${req.fromId}`);
+      
+      // Send a cute success notification
+      const titleZh = "💖 羁绊缔结成功！(≧▽≦)/*";
+      const titleEn = "💖 Soul Contract Signed!";
+      const contentZh = `✨ 【${profile?.displayName || '同好'}】同意了你的死党契约！你们现在是真正的同好伙伴啦，快去私聊互动吧！`;
+      const contentEn = `✨ 【${profile?.displayName || 'Pal'}】accepted your soul contract! You are now official friends! Go text each other!`;
+      
+      await addDoc(collection(db, 'notifications'), {
+        userId: req.fromId,
+        senderId: user.uid,
+        senderName: profile?.displayName || user.displayName || 'Pal',
+        senderPhoto: profile?.photoURL || user.photoURL || '',
+        type: 'friend_accept',
+        title: lang === 'zh' ? titleZh : titleEn,
+        content: lang === 'zh' ? contentZh : contentEn,
+        link: '/profile',
+        isRead: false,
+        createdAt: serverTimestamp()
+      });
+      
+    } catch (err) {
+      console.error("Failed to accept friend request in NotificationCenter:", err);
+    }
+  };
+
+  // Handle declining a friend request
+  const handleDeclineFriendRequest = async (req: any) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'friendRequests', req.id), { status: 'rejected' });
+    } catch (err) {
+      console.error("Failed to decline friend request in NotificationCenter:", err);
+    }
+  };
 
   // Check browser push notification permission
   useEffect(() => {
@@ -176,7 +263,7 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
     return () => unsubscribe();
   }, [user, soundEnabled, profile]);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter(n => !n.isRead).length + friendRequests.length;
 
   // Mark a single notification as read and navigate
   const handleNotifClick = async (notif: AppNotification) => {
@@ -367,8 +454,8 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
               transition={{ type: 'spring', damping: 22 }}
               className="fixed top-0 bottom-0 right-0 w-full max-w-sm bg-[#141416] border-l border-white/10 shadow-2xl z-[1000] flex flex-col"
             >
-              {/* Header */}
-              <div className="p-5 border-b border-white/5 flex items-center justify-between">
+              {/* Header with extra top padding on mobile to clear notch */}
+              <div className="pt-14 pb-5 px-5 md:pt-5 border-b border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-indigo-400" />
                   <h3 className="text-md font-bold text-white">
@@ -442,6 +529,52 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
 
               {/* Notifications List Container */}
               <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-none p-2 space-y-1">
+                {/* Pending Friend Requests Section */}
+                {friendRequests.length > 0 && (
+                  <div className="p-2.5 mb-3 bg-indigo-500/5 rounded-2xl border border-indigo-500/15 space-y-2">
+                    <h4 className="text-xs font-bold text-indigo-400 px-1 flex items-center gap-1.5">
+                      <UserPlus className="w-3.5 h-3.5 animate-pulse" />
+                      <span>{lang === 'zh' ? '待处理死党契约申请' : 'Pending Soul Contracts'}</span>
+                      <span className="bg-indigo-500 text-white text-[9px] px-1.5 py-0.5 rounded-full ml-auto font-mono">
+                        {friendRequests.length}
+                      </span>
+                    </h4>
+                    
+                    <div className="space-y-1.5">
+                      {friendRequests.map((req) => (
+                        <div key={req.id} className="p-3 bg-[#1b1c23] rounded-xl border border-white/5 flex flex-col gap-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <img 
+                              src={req.fromPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${req.fromId}`} 
+                              alt="" 
+                              className="w-8 h-8 rounded-full border border-white/10 object-cover"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-white truncate">{req.fromName}</p>
+                              <p className="text-[10px] text-slate-400 mt-0.5 truncate">{lang === 'zh' ? '想要与你缔结死党契约' : 'Wants to be your BFF'}</p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleAcceptFriendRequest(req)}
+                              className="flex-1 py-1.5 bg-gradient-to-r from-indigo-500 to-pink-500 hover:from-indigo-600 hover:to-pink-600 text-white text-[10px] font-bold rounded-lg transition-all active:scale-95 shadow-sm"
+                            >
+                              {lang === 'zh' ? '契约达成 (接受)' : 'Accept'}
+                            </button>
+                            <button
+                              onClick={() => handleDeclineFriendRequest(req)}
+                              className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white text-[10px] font-bold rounded-lg transition-colors"
+                            >
+                              {lang === 'zh' ? '婉拒' : 'Decline'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {notifications.length === 0 ? (
                   <div className="py-20 text-center space-y-3">
                     <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mx-auto text-slate-500">
@@ -449,7 +582,9 @@ export default function NotificationCenter({ inlineBell = false, onClosePanel }:
                     </div>
                     <p className="text-xs text-slate-400 px-8">
                       {lang === 'zh' 
-                        ? '目前还没有收到任何契约电波哦~ 快去发帖、吐槽、或者添加同好死党吧！(●ˇ∀ˇ●)' 
+                        ? friendRequests.length > 0 
+                          ? '上方有待处理的死党契约申请，快去通过吧！(*・ω・)ﾉ✧'
+                          : '目前还没有收到任何契约电波哦~ 快去发帖、吐槽、或者添加同好死党吧！(●ˇ∀ˇ●)' 
                         : 'Your signal wave is currently calm! Go write posts or add friends to receive chimes! (●ˇ∀ˇ●)'}
                     </p>
                   </div>

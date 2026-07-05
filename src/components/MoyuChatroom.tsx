@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, limit, addDoc, serverTimestamp, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './AuthProvider';
 import { useLanguage } from './LanguageProvider';
@@ -99,26 +99,21 @@ export default function MoyuChatroom() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch Friends List
+  // Fetch Friends List (Real-time tracking to ensure list updates instantly)
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setFriendsList([]);
+      return;
+    }
 
-    const fetchFriends = async () => {
+    const friendsRef = collection(db, 'users', user.uid, 'friends');
+    
+    const unsubscribe = onSnapshot(friendsRef, async (snap) => {
       try {
-        const cacheKey = `user_friends_list_${user.uid}`;
-        const cached = loadFromCache<any[]>(cacheKey);
-        if (cached) {
-          setFriendsList(cached);
-          return; // Skip network fetch
-        }
-
-        const friendsRef = collection(db, 'users', user.uid, 'friends');
-        const snap = await getDocs(friendsRef);
         const friendIds = snap.docs.map(d => d.id);
 
         if (friendIds.length === 0) {
           setFriendsList([]);
-          saveToCache(cacheKey, [], 180000); // Cache empty array
           return;
         }
 
@@ -150,8 +145,8 @@ export default function MoyuChatroom() {
             try {
               const usersRef = collection(db, 'users');
               const q = query(usersRef, where('uid', 'in', uncachedIds));
-              const snap = await getDocs(q);
-              snap.forEach(docSnap => {
+              const userSnap = await getDocs(q);
+              userSnap.forEach(docSnap => {
                 const uData = docSnap.data() as UserProfile;
                 saveToCache(`cached_user_profile_${uData.uid}`, uData, 300000);
                 fetchedFriendsMap.set(uData.uid, {
@@ -162,7 +157,7 @@ export default function MoyuChatroom() {
                 });
               });
             } catch (err) {
-              console.error(`Error loading profiles for chunk:`, err);
+              console.error(`Error loading profiles for chunk in real-time:`, err);
             }
           }
         }
@@ -175,13 +170,12 @@ export default function MoyuChatroom() {
         });
 
         setFriendsList(fetchedFriends);
-        saveToCache(cacheKey, fetchedFriends, 180000);
       } catch (err: any) {
-        console.error("Error fetching friends list:", err);
+        console.error("Error in real-time friends list sync:", err);
       }
-    };
+    });
 
-    fetchFriends();
+    return () => unsubscribe();
   }, [user]);
 
   // Handle switching private / public
